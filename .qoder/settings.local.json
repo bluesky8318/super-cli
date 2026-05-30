@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /Users/leon/work/zeronote/scm/github/super-cli && mkdir -p src/{cli/commands,core,server/routes,web/src/{pages,components,hooks,api}})"
+    ]
+  }
+}
