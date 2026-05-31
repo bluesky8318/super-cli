@@ -625,6 +625,307 @@ body {
   gap: 10px;
 }
 
+.overlay-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.overlay-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.overlay-action-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.overlay-action-btn svg {
+  flex-shrink: 0;
+}
+
+.overlay-panel-wide {
+  width: 860px;
+}
+
+.overlay-tabs {
+  display: flex;
+  gap: 0;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  margin-left: auto;
+  margin-right: 12px;
+}
+
+.overlay-tab {
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+
+.overlay-tab.active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.overlay-tab:hover:not(.active) {
+  color: var(--text-secondary);
+}
+
+/* ====== File Browser ====== */
+.file-browser {
+  display: flex;
+  height: calc(80vh - 100px);
+  min-height: 300px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.file-tree {
+  width: 240px;
+  min-width: 240px;
+  border-right: 1px solid var(--border-color);
+  overflow-y: auto;
+  background: var(--bg-card);
+}
+
+.file-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: background 0.1s;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.file-tree-item:hover {
+  background: var(--bg-card-hover);
+}
+
+.file-tree-item.selected {
+  background: var(--accent-bg);
+  color: var(--text-primary);
+}
+
+.tree-chevron {
+  font-size: 8px;
+  transition: transform 0.15s;
+  width: 12px;
+  text-align: center;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.tree-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tree-item svg {
+  flex-shrink: 0;
+}
+
+.file-preview {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-main);
+}
+
+.file-preview-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.file-preview-path {
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', monospace);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-preview-size {
+  font-size: 11px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.file-truncation-banner {
+  padding: 6px 12px;
+  background: var(--accent-bg);
+  font-size: 11px;
+  color: var(--accent);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.file-content-pre {
+  padding: 12px;
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', monospace);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre;
+  color: var(--text-primary);
+  flex: 1;
+  overflow-x: auto;
+  tab-size: 2;
+  margin: 0;
+}
+
+.file-preview-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.file-preview-binary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.file-preview-binary .file-preview-size {
+  font-size: 11px;
+  margin-left: 0;
+}
+
+/* Markdown rendered body */
+.file-md-body {
+  padding: 16px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  overflow-x: auto;
+}
+
+.file-md-body h1, .file-md-body h2, .file-md-body h3,
+.file-md-body h4, .file-md-body h5, .file-md-body h6 {
+  margin-top: 1.2em;
+  margin-bottom: 0.4em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.file-md-body h1 { font-size: 1.5em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em; }
+.file-md-body h2 { font-size: 1.3em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.2em; }
+.file-md-body h3 { font-size: 1.15em; }
+
+.file-md-body p { margin: 0.6em 0; }
+
+.file-md-body a { color: var(--accent); text-decoration: none; }
+.file-md-body a:hover { text-decoration: underline; }
+
+.file-md-body code {
+  background: var(--bg-input);
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', monospace);
+  font-size: 0.88em;
+}
+
+.file-md-body pre {
+  margin: 0.8em 0;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+
+.file-md-body pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
+.file-md-body ul, .file-md-body ol {
+  padding-left: 1.8em;
+  margin: 0.5em 0;
+}
+
+.file-md-body li { margin: 0.2em 0; }
+
+.file-md-body blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 12px;
+  margin: 0.8em 0;
+  color: var(--text-secondary);
+}
+
+.file-md-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.8em 0;
+}
+
+.file-md-body th, .file-md-body td {
+  border: 1px solid var(--border-color);
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 0.9em;
+}
+
+.file-md-body th { background: var(--bg-input); font-weight: 600; }
+
+.file-md-body hr { border: none; border-top: 1px solid var(--border-color); margin: 1.2em 0; }
+
+.file-md-body img { max-width: 100%; border-radius: var(--radius-sm); }
+
+/* Prism code block overrides */
+.file-content-pre code {
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', monospace);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .meta-pre {
   white-space: pre-wrap;
   font-family: monospace;
