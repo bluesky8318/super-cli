@@ -114,6 +114,7 @@ export class SessionReader {
     }
 
     metadata.models = [...models];
+    if (metadata.cwd) metadata.project = metadata.cwd;
     return metadata;
   }
 

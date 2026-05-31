@@ -1,9 +1,11 @@
+import { execSync } from 'node:child_process';
 import type { FastifyInstance } from 'fastify';
 import type { CliProvider } from '../../core/types.js';
 import { SessionIndex } from '../../core/session-index.js';
 import { ProjectArchive } from '../../core/project-archive.js';
 import { getProjectDetail } from '../../core/project-info.js';
 import { getAvailableProviders } from '../../core/providers.js';
+import { TerminalLauncher } from '../../core/terminal-launcher.js';
 
 export function registerProjectRoutes(app: FastifyInstance): void {
   const index = new SessionIndex();
@@ -70,5 +72,40 @@ export function registerProjectRoutes(app: FastifyInstance): void {
     const { encoded } = req.params as { encoded: string };
     await archive.unpin(encoded);
     return { success: true };
+  });
+
+  app.post('/api/projects/:encoded/open-finder', async (req, reply) => {
+    const { encoded } = req.params as { encoded: string };
+    const projects = await index.getProjects();
+    const project = projects.find(p => p.encoded === encoded);
+    if (!project) {
+      reply.code(404);
+      return { error: 'Project not found' };
+    }
+    try {
+      execSync(`open ${JSON.stringify(project.decoded)}`);
+      return { success: true };
+    } catch (err: any) {
+      reply.code(500);
+      return { error: err.message ?? String(err) };
+    }
+  });
+
+  app.post('/api/projects/:encoded/open-terminal', async (req, reply) => {
+    const { encoded } = req.params as { encoded: string };
+    const projects = await index.getProjects();
+    const project = projects.find(p => p.encoded === encoded);
+    if (!project) {
+      reply.code(404);
+      return { error: 'Project not found' };
+    }
+    const launcher = new TerminalLauncher();
+    try {
+      await launcher.openDirectory(project.decoded);
+      return { success: true };
+    } catch (err: any) {
+      reply.code(500);
+      return { error: err.message ?? String(err) };
+    }
   });
 }

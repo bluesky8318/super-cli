@@ -7,6 +7,7 @@ export interface ProviderConfig {
   id: CliProvider;
   name: string;
   command: string;
+  newArgs: string[];
   resumeArgs: (sessionId: string) => string[];
   homeDir: string;
 }
@@ -16,6 +17,7 @@ const PROVIDER_CONFIGS: ProviderConfig[] = [
     id: 'claude-code',
     name: 'Claude Code',
     command: 'claude',
+    newArgs: ['--dangerously-skip-permissions'],
     resumeArgs: (id) => ['--dangerously-skip-permissions', '--resume', id],
     homeDir: join(homedir(), '.claude'),
   },
@@ -23,6 +25,7 @@ const PROVIDER_CONFIGS: ProviderConfig[] = [
     id: 'qoder',
     name: 'Qoder CLI',
     command: 'qodercli',
+    newArgs: ['--dangerously-skip-permissions'],
     resumeArgs: (id) => ['--dangerously-skip-permissions', '--resume', id],
     homeDir: join(homedir(), '.qoder'),
   },
@@ -30,6 +33,7 @@ const PROVIDER_CONFIGS: ProviderConfig[] = [
     id: 'codex',
     name: 'Codex CLI',
     command: 'codex',
+    newArgs: [],
     resumeArgs: (id) => ['resume', id],
     homeDir: join(homedir(), '.codex'),
   },

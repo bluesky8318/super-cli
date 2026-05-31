@@ -8,6 +8,7 @@ import { registerSessionRoutes } from './routes/sessions.js';
 import { registerTaskRoutes } from './routes/tasks.js';
 import { registerStatsRoutes } from './routes/stats.js';
 import { registerProjectRoutes } from './routes/projects.js';
+import { registerConfigRoutes } from './routes/config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -20,6 +21,7 @@ export async function startServer(options: { port: number; host: string }): Prom
   registerTaskRoutes(app);
   registerStatsRoutes(app);
   registerProjectRoutes(app);
+  registerConfigRoutes(app);
 
   const webDir = join(__dirname, '..', 'web');
   if (existsSync(webDir)) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { fetchSessions, fetchProjects, fetchSessionMessages, fetchTasks, resumeSession, createNewSession, fetchProjectDetail, archiveProject, unarchiveProject, pinProject, unpinProject, fetchProviders } from './api/client.js';
+import { fetchSessions, fetchProjects, fetchSessionMessages, fetchTasks, resumeSession, createNewSession, fetchProjectDetail, archiveProject, unarchiveProject, pinProject, unpinProject, fetchProviders, openProjectInFinder, openProjectInTerminal } from './api/client.js';
+import ConfigView from './ConfigView.js';
 import './index.css';
 
 type Theme = 'light' | 'dark' | 'deep';
@@ -90,6 +91,10 @@ interface ProjectDetailData {
 
 export default function App() {
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('theme') as Theme) || 'light');
+  const [appMode, setAppMode] = useState<'task' | 'config'>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('mode') === 'config' ? 'config' : 'task';
+  });
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [selectedProviders, setSelectedProviders] = useState<CliProvider[]>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -130,12 +135,20 @@ export default function App() {
   const [resumeStatus, setResumeStatus] = useState<string | null>(null);
   const [archivedCollapsed, setArchivedCollapsed] = useState(true);
   const [providerDropdownOpen, setProviderDropdownOpen] = useState(false);
+  const [newTaskDropdownOpen, setNewTaskDropdownOpen] = useState(false);
   const [projectDetail, setProjectDetail] = useState<ProjectDetailData | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ encoded: string; decoded: string; pinned: boolean; archived: boolean; x: number; y: number } | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('sidebar-width');
+    return saved ? Number(saved) : 240;
+  });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const messageListRef = useRef<HTMLDivElement>(null);
   const initialSessionId = useRef(new URLSearchParams(window.location.search).get('session'));
 
   useEffect(() => {
     const params = new URLSearchParams();
+    params.set('mode', appMode);
     if (selectedProviders.length > 0) params.set('provider', selectedProviders.join(','));
     if (selectedProject) params.set('project', selectedProject);
     if (viewMode !== 'board') params.set('view', viewMode);
@@ -147,7 +160,7 @@ export default function App() {
     const qs = params.toString();
     const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState(null, '', newUrl);
-  }, [selectedProviders, selectedProject, viewMode, sortMode, selectedSession, groupByDate]);
+  }, [appMode, selectedProviders, selectedProject, viewMode, sortMode, selectedSession, groupByDate]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -263,47 +276,56 @@ export default function App() {
     setTimeout(() => setResumeStatus(null), 3000);
   }
 
-  async function handleArchive(encoded: string, e: React.MouseEvent) {
-    e.stopPropagation();
+  async function handleArchive(encoded: string, e?: React.MouseEvent) {
+    e?.stopPropagation();
     await archiveProject(encoded);
     const providerParam = selectedProviders.length === 1 ? { provider: selectedProviders[0] } : undefined;
     const projData = await fetchProjects(providerParam);
     setProjects(projData.projects ?? []);
   }
 
-  async function handleUnarchive(encoded: string, e: React.MouseEvent) {
-    e.stopPropagation();
+  async function handleUnarchive(encoded: string, e?: React.MouseEvent) {
+    e?.stopPropagation();
     await unarchiveProject(encoded);
     const providerParam = selectedProviders.length === 1 ? { provider: selectedProviders[0] } : undefined;
     const projData = await fetchProjects(providerParam);
     setProjects(projData.projects ?? []);
   }
 
-  async function handlePin(encoded: string, e: React.MouseEvent) {
-    e.stopPropagation();
+  async function handlePin(encoded: string, e?: React.MouseEvent) {
+    e?.stopPropagation();
     await pinProject(encoded);
     const providerParam = selectedProviders.length === 1 ? { provider: selectedProviders[0] } : undefined;
     const projData = await fetchProjects(providerParam);
     setProjects(projData.projects ?? []);
   }
 
-  async function handleUnpin(encoded: string, e: React.MouseEvent) {
-    e.stopPropagation();
+  async function handleUnpin(encoded: string, e?: React.MouseEvent) {
+    e?.stopPropagation();
     await unpinProject(encoded);
     const providerParam = selectedProviders.length === 1 ? { provider: selectedProviders[0] } : undefined;
     const projData = await fetchProjects(providerParam);
     setProjects(projData.projects ?? []);
   }
 
-  async function openProjectDetail(encoded: string, e: React.MouseEvent) {
-    e.stopPropagation();
+  async function handleOpenFinder(encoded: string, e?: React.MouseEvent) {
+    e?.stopPropagation();
+    await openProjectInFinder(encoded);
+  }
+
+  async function handleOpenTerminal(encoded: string, e?: React.MouseEvent) {
+    e?.stopPropagation();
+    await openProjectInTerminal(encoded);
+  }
+
+  async function openProjectDetail(encoded: string, e?: React.MouseEvent) {
+    e?.stopPropagation();
     const data = await fetchProjectDetail(encoded);
     setProjectDetail(data);
   }
 
-  async function handleNewTask() {
+  async function handleNewTask(provider: CliProvider = 'claude-code') {
     if (!selectedProject) return;
-    const provider = selectedProviders.length === 1 ? selectedProviders[0] : undefined;
     const result = await createNewSession(selectedProject, provider);
     if (result.action === 'error') {
       alert(result.message ?? '启动失败');
@@ -329,6 +351,32 @@ export default function App() {
     document.addEventListener('mouseup', onUp);
   }, [detailWidth]);
 
+  const handleSidebarResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setResizing(true);
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+
+    const onMove = (ev: MouseEvent) => {
+      const newWidth = Math.max(180, Math.min(400, startWidth + (ev.clientX - startX)));
+      setSidebarWidth(newWidth);
+    };
+    const onUp = () => {
+      setResizing(false);
+      setSidebarWidth(w => { localStorage.setItem('sidebar-width', String(w)); return w; });
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [sidebarWidth]);
+
+  function handleProjectContextMenu(p: ProjectInfo, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ encoded: p.encoded, decoded: p.decoded, pinned: !!p.pinned, archived: !!p.archived, x: e.clientX, y: e.clientY });
+  }
+
   const filteredSessions = searchQuery
     ? sessions.filter(s =>
         s.firstUserMessage?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -341,9 +389,12 @@ export default function App() {
   return (
     <div className={`app-container ${resizing ? 'resizing' : ''}`}>
       {/* 左侧导航 */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`} style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
         <div className="sidebar-header">
-          <h1 className="app-title">任务中心</h1>
+          <div className="mode-tabs">
+            <button className={`mode-tab ${appMode === 'task' ? 'active' : ''}`} onClick={() => setAppMode('task')}>任务</button>
+            <button className={`mode-tab ${appMode === 'config' ? 'active' : ''}`} onClick={() => setAppMode('config')}>Harness</button>
+          </div>
           <div className="theme-switcher">
             <button className={`theme-btn ${theme === 'light' ? 'active' : ''}`} onClick={() => setTheme('light')} title="亮色">☀️</button>
             <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')} title="暗色">🌙</button>
@@ -432,13 +483,11 @@ export default function App() {
                     key={p.encoded}
                     className={`project-item ${selectedProject === p.decoded ? 'active' : ''}`}
                     onClick={() => setSelectedProject(p.decoded)}
+                    onContextMenu={(e) => handleProjectContextMenu(p, e)}
                   >
                     <span className="project-name">{p.decoded.split('/').slice(-2).join('/')}</span>
                     <span className="project-count">{p.sessionCount}</span>
-                    <span className="project-actions">
-                      <button className="project-action-btn" onClick={(e) => openProjectDetail(p.encoded, e)} title="查看详情"><IconInfo /></button>
-                      <button className="project-action-btn" onClick={(e) => handleUnpin(p.encoded, e)} title="取消置顶"><IconPinOff /></button>
-                    </span>
+                    <button className="project-more-btn" onClick={(e) => { e.stopPropagation(); handleProjectContextMenu(p, e); }} title="更多操作">···</button>
                   </div>
                 ))}
               </>
@@ -455,14 +504,11 @@ export default function App() {
                     key={p.encoded}
                     className={`project-item ${selectedProject === p.decoded ? 'active' : ''}`}
                     onClick={() => setSelectedProject(p.decoded)}
+                    onContextMenu={(e) => handleProjectContextMenu(p, e)}
                   >
                     <span className="project-name">{p.decoded.split('/').slice(-2).join('/')}</span>
                     <span className="project-count">{p.sessionCount}</span>
-                    <span className="project-actions">
-                      <button className="project-action-btn" onClick={(e) => openProjectDetail(p.encoded, e)} title="查看详情"><IconInfo /></button>
-                      <button className="project-action-btn" onClick={(e) => handlePin(p.encoded, e)} title="置顶"><IconPin /></button>
-                      <button className="project-action-btn" onClick={(e) => handleArchive(p.encoded, e)} title="归档"><IconArchive /></button>
-                    </span>
+                    <button className="project-more-btn" onClick={(e) => { e.stopPropagation(); handleProjectContextMenu(p, e); }} title="更多操作">···</button>
                   </div>
                 ))}
               </>
@@ -479,13 +525,11 @@ export default function App() {
                     key={p.encoded}
                     className={`project-item archived ${selectedProject === p.decoded ? 'active' : ''}`}
                     onClick={() => setSelectedProject(p.decoded)}
+                    onContextMenu={(e) => handleProjectContextMenu(p, e)}
                   >
                     <span className="project-name">{p.decoded.split('/').slice(-2).join('/')}</span>
                     <span className="project-count">{p.sessionCount}</span>
-                    <span className="project-actions">
-                      <button className="project-action-btn" onClick={(e) => openProjectDetail(p.encoded, e)} title="查看详情"><IconInfo /></button>
-                      <button className="project-action-btn" onClick={(e) => handleUnarchive(p.encoded, e)} title="取消归档"><IconArchiveRestore /></button>
-                    </span>
+                    <button className="project-more-btn" onClick={(e) => { e.stopPropagation(); handleProjectContextMenu(p, e); }} title="更多操作">···</button>
                   </div>
                 ))}
               </>
@@ -493,20 +537,52 @@ export default function App() {
           </div>
         </div>
       </aside>
+      <div className="sidebar-resize-handle" onMouseDown={handleSidebarResizeStart} />
+      {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
 
+      {appMode === 'config' ? (
+        <ConfigView
+          selectedProject={selectedProject ? projects.find(p => p.decoded === selectedProject)?.decoded : undefined}
+          selectedProjectProviders={selectedProject ? projects.find(p => p.decoded === selectedProject)?.providers : undefined}
+          providers={providers}
+          onToggleSidebar={() => setSidebarOpen(o => !o)}
+        />
+      ) : (
+      <>
       {/* 主内容区 */}
       <main className="main-content">
         <header className="toolbar">
           <div className="toolbar-left">
+            <button className="hamburger-btn" onClick={() => setSidebarOpen(o => !o)} title="菜单">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+            </button>
             <h2 className="page-title">
               {selectedProject ? selectedProject.split('/').slice(-2).join('/') : '全部任务'}
             </h2>
             <span className="task-count">{filteredSessions.length}</span>
             {selectedProject && (
-              <button className="new-task-btn" onClick={handleNewTask} title="在当前项目新建任务">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-                新建任务
-              </button>
+              <div className="new-task-split">
+                <button className="new-task-btn" onClick={() => handleNewTask('claude-code')} title="新建任务 (Claude Code)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                  新建任务
+                </button>
+                <button className="new-task-arrow" onClick={() => setNewTaskDropdownOpen(o => !o)} title="选择 CLI 工具">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                {newTaskDropdownOpen && (
+                  <>
+                    <div className="new-task-backdrop" onClick={() => setNewTaskDropdownOpen(false)} />
+                    <div className="new-task-menu">
+                      {providers.map(p => (
+                        <div key={p.id} className="new-task-menu-item" onClick={() => { handleNewTask(p.id); setNewTaskDropdownOpen(false); }}>
+                          <span className="provider-dot" style={{ background: PROVIDER_COLORS[p.id] }} />
+                          {p.name}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
           <div className="toolbar-right">
@@ -666,6 +742,8 @@ export default function App() {
           )}
         </div>
       )}
+      </>
+      )}
 
       {/* Project Detail Overlay */}
       {projectDetail && (
@@ -693,6 +771,42 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {contextMenu && (
+        <>
+          <div className="context-menu-backdrop" onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }} />
+          <div className="context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
+            <button className="context-menu-item" onClick={() => { handleOpenFinder(contextMenu.encoded); setContextMenu(null); }}>
+              <IconFolder /> 在 Finder 中打开
+            </button>
+            <button className="context-menu-item" onClick={() => { handleOpenTerminal(contextMenu.encoded); setContextMenu(null); }}>
+              <IconTerminal /> 在终端中打开
+            </button>
+            <button className="context-menu-item" onClick={() => { openProjectDetail(contextMenu.encoded); setContextMenu(null); }}>
+              <IconInfo /> 查看详情
+            </button>
+            <div className="context-menu-divider" />
+            {contextMenu.pinned ? (
+              <button className="context-menu-item" onClick={() => { handleUnpin(contextMenu.encoded); setContextMenu(null); }}>
+                <IconPinOff /> 取消置顶
+              </button>
+            ) : (
+              <button className="context-menu-item" onClick={() => { handlePin(contextMenu.encoded); setContextMenu(null); }}>
+                <IconPin /> 置顶
+              </button>
+            )}
+            {contextMenu.archived ? (
+              <button className="context-menu-item" onClick={() => { handleUnarchive(contextMenu.encoded); setContextMenu(null); }}>
+                <IconArchiveRestore /> 取消归档
+              </button>
+            ) : (
+              <button className="context-menu-item" onClick={() => { handleArchive(contextMenu.encoded); setContextMenu(null); }}>
+                <IconArchive /> 归档
+              </button>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
@@ -868,4 +982,12 @@ function IconArchiveRestore() {
 
 function IconInfo() {
   return <svg {...iconProps}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>;
+}
+
+function IconFolder() {
+  return <svg {...iconProps}><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>;
+}
+
+function IconTerminal() {
+  return <svg {...iconProps}><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>;
 }
