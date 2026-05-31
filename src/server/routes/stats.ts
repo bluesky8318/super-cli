@@ -1,8 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { SessionIndex } from '../../core/session-index.js';
 
-export function registerStatsRoutes(app: FastifyInstance): void {
-  const index = new SessionIndex();
+export function registerStatsRoutes(app: FastifyInstance, index: SessionIndex): void {
 
   app.get('/api/stats', async (req) => {
     const query = req.query as Record<string, string>;

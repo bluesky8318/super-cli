@@ -4,8 +4,7 @@ import { SessionIndex, inferSessionStatus } from '../../core/session-index.js';
 import { SessionSearch } from '../../core/session-search.js';
 import { TerminalLauncher } from '../../core/terminal-launcher.js';
 
-export function registerSessionRoutes(app: FastifyInstance): void {
-  const index = new SessionIndex();
+export function registerSessionRoutes(app: FastifyInstance, index: SessionIndex): void {
   const search = new SessionSearch(undefined, index);
 
   app.get('/api/sessions', async (req) => {

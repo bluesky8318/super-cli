@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import type { CliProvider, RuleFile } from './types.js';
@@ -24,7 +24,32 @@ function getGlobalRuleSpecs(): RuleFileSpec[] {
   return specs;
 }
 
-const PROJECT_RULE_FILES = ['CLAUDE.md', 'agents.md', '.cursorrules', '.github/copilot-instructions.md'];
+const KNOWN_PROJECT_RULE_NAMES = [
+  'CLAUDE.md', 'AGENTS.md', '.cursorrules',
+  '.github/copilot-instructions.md',
+];
+
+async function scanProjectRuleFiles(projectPath: string): Promise<{ name: string; path: string }[]> {
+  const results: { name: string; path: string }[] = [];
+  for (const name of KNOWN_PROJECT_RULE_NAMES) {
+    const fullPath = join(projectPath, name);
+    if (existsSync(fullPath)) {
+      results.push({ name, path: fullPath });
+    }
+  }
+
+  try {
+    const entries = await readdir(projectPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+      if (KNOWN_PROJECT_RULE_NAMES.includes(entry.name)) continue;
+      if (entry.name === 'README.md') continue;
+      results.push({ name: entry.name, path: join(projectPath, entry.name) });
+    }
+  } catch { /* ignore read errors */ }
+
+  return results;
+}
 
 export async function getRuleFiles(provider?: CliProvider, projectPath?: string): Promise<RuleFile[]> {
   const results: RuleFile[] = [];
@@ -43,16 +68,16 @@ export async function getRuleFiles(provider?: CliProvider, projectPath?: string)
   }
 
   if (projectPath) {
-    for (const file of PROJECT_RULE_FILES) {
-      const fullPath = join(projectPath, file);
-      const mainProvider = provider ?? 'claude-code';
+    const mainProvider = provider ?? 'claude-code';
+    const projectFiles = await scanProjectRuleFiles(projectPath);
+    for (const file of projectFiles) {
       results.push({
-        id: `${mainProvider}:project:${file}`,
-        name: file,
-        path: fullPath,
+        id: `${mainProvider}:project:${file.name}`,
+        name: file.name,
+        path: file.path,
         provider: mainProvider,
         scope: 'project',
-        exists: existsSync(fullPath),
+        exists: true,
       });
     }
   }

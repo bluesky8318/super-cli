@@ -2,9 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { TaskStore } from '../../core/task-store.js';
 import { SessionIndex } from '../../core/session-index.js';
 
-export function registerTaskRoutes(app: FastifyInstance): void {
-  const taskStore = new TaskStore();
-  const index = new SessionIndex();
+export function registerTaskRoutes(app: FastifyInstance, index: SessionIndex, taskStore: TaskStore): void {
 
   app.get('/api/tasks', async (req) => {
     const query = req.query as Record<string, string>;

@@ -43,8 +43,14 @@ export class SessionIndex {
   private taskStore: TaskStore;
   private cache: Map<string, SessionMetadata> = new Map();
   private built = false;
+  private lastBuildTime = 0;
+  private readonly ttlMs: number;
 
-  constructor(readers?: (SessionReader | CodexReader)[], taskStore?: TaskStore) {
+  constructor(
+    readers?: (SessionReader | CodexReader)[],
+    taskStore?: TaskStore,
+    options?: { ttlMs?: number },
+  ) {
     if (readers) {
       this.readers = readers;
     } else {
@@ -54,10 +60,17 @@ export class SessionIndex {
       );
     }
     this.taskStore = taskStore ?? new TaskStore();
+    this.ttlMs = options?.ttlMs ?? 30_000;
+  }
+
+  invalidateCache(): void {
+    this.built = false;
+    this.lastBuildTime = 0;
   }
 
   async buildIndex(options?: { forceRefresh?: boolean }): Promise<void> {
-    if (this.built && !options?.forceRefresh) return;
+    const now = Date.now();
+    if (this.built && !options?.forceRefresh && (now - this.lastBuildTime) < this.ttlMs) return;
 
     this.cache.clear();
     const labels = await this.taskStore.getAll();
@@ -83,6 +96,7 @@ export class SessionIndex {
     }
 
     this.built = true;
+    this.lastBuildTime = Date.now();
   }
 
   async getAllSessions(options?: ListOptions): Promise<SessionMetadata[]> {

@@ -224,3 +224,8 @@ export async function fetchPermissions(params?: Record<string, string>) {
   const res = await fetch(url.toString());
   return res.json();
 }
+
+export async function refreshCache() {
+  const res = await fetch(`${API_BASE}/refresh`, { method: 'POST' });
+  return res.json();
+}
