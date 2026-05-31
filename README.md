@@ -18,7 +18,15 @@ AI 编程助手 session 管理工具。统一管理 Claude Code、Qoder、Codex 
 **项目管理**
 - 左侧项目导航，支持置顶、归档、展开/折叠
 - 右键菜单：在 Finder 中打开、在终端中打开、查看详情
+- 项目详情浮层：元数据展示 + 操作按钮 + 文件浏览器
 - 新建任务时可选择 CLI 工具（Claude Code / Qoder / Codex）
+
+**文件浏览器**
+- 在项目详情浮层中浏览项目文件（只读）
+- 左侧文件树 + 右侧文件预览，按需加载
+- 代码文件语法高亮（Prism.js，支持 TypeScript/JSON/CSS/Python 等 20+ 种语言）
+- Markdown 文件渲染为富文本预览
+- 自动过滤 `.git`、`node_modules`、`dist` 等目录
 
 **Harness 配置查看**
 - 查看和管理各 provider 的 Skills、MCP Servers、Rules、Hooks、Permissions
@@ -103,10 +111,12 @@ super-cli --provider qoder search "query"
 super-cli serve --port 3000 --open
 ```
 
-Web 界面提供三种视图模式：
-- **看板视图** — 按任务状态分列展示，支持按日期分组
-- **卡片视图** — 网格布局，适合快速浏览
-- **列表视图** — 紧凑布局，适合大量 session 场景
+Web 界面提供：
+- **侧边栏导航** — 任务 / Harness 双模式切换，项目列表支持右键菜单
+- **三种视图** — 看板视图（按状态分列）、卡片视图、列表视图
+- **项目详情** — 元数据、操作按钮、文件浏览器（语法高亮 + Markdown 渲染）
+- **工具栏** — 强制刷新缓存、排序、视图切换、Provider 过滤
+- **多主题** — 亮色 / 暗色 / 深蓝三种主题
 
 点击 session 卡片可展开右侧详情面板，查看对话记录、元数据，并一键在终端中恢复会话。
 
@@ -117,6 +127,8 @@ Web 界面提供三种视图模式：
 | CLI | Commander.js |
 | HTTP 服务器 | Fastify 5 |
 | 前端 | React 19 + Vite + TailwindCSS 4 |
+| 语法高亮 | Prism.js |
+| Markdown 渲染 | marked |
 | 构建 | tsup (CLI/Server) + Vite (Web) |
 | 测试 | Vitest |
 | 运行时 | Node.js >= 22 |
