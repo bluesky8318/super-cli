@@ -1,5 +1,5 @@
 {
-  "name": "super-cli",
+  "name": "@bluesky8318/super-cli",
   "version": "0.1.0",
   "description": "AI coding assistant session manager for Claude Code, Qoder, and Codex",
   "type": "module",
