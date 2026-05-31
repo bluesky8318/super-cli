@@ -1,0 +1,543 @@
+# Instincts generated from https://github.com/bluesky8318/super-cli
+# Generated: 2026-05-31T11:42:30.255Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: super-cli-commit-conventional
+trigger: "when writing a commit message"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: https://github.com/bluesky8318/super-cli
+---
+
+# Super Cli Commit Conventional
+
+## Action
+
+Use conventional commit format with prefixes: fix, docs, feat, refactor, chore
+
+## Evidence
+
+- 8 commits analyzed
+- Detected conventional commit pattern
+- Examples: feat: add harness config viewer, context menu, and sidebar improvements, fix: add cache TTL to SessionIndex and fix rules filename case
+
+---
+id: super-cli-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/bluesky8318/super-cli
+---
+
+# Super Cli Commit Length
+
+## Action
+
+Keep commit messages concise (~48 characters)
+
+## Evidence
+
+- Average commit message length: 48 chars
+- Based on 8 commits
+
+---
+id: super-cli-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/bluesky8318/super-cli
+---
+
+# Super Cli Naming Files
+
+## Action
+
+Use camelCase naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: camelCase
+
+---
+id: super-cli-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/bluesky8318/super-cli
+---
+
+# Super Cli Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: super-cli-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/bluesky8318/super-cli
+---
+
+# Super Cli Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: super-cli-test-separate
+trigger: "when writing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/bluesky8318/super-cli
+---
+
+# Super Cli Test Separate
+
+## Action
+
+Place tests in the tests/ or __tests__/ directory, mirroring src structure
+
+## Evidence
+
+- Separate test directory pattern detected
+- Tests live in dedicated test folders
+
+---
+id: super-cli-workflow-feature-development
+trigger: "when implementing a new feature"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/bluesky8318/super-cli
+---
+
+# Super Cli Workflow Feature Development
+
+## Action
+
+Follow the feature-development workflow:
+1. Add feature implementation
+2. Add tests for feature
+3. Update documentation
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~19x per month
+- Files: src/core/*, src/server/*, src/server/routes/*
+
+---
+id: super-cli-workflow-feature-development-api-and-ui
+trigger: "when doing feature development api and ui"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/bluesky8318/super-cli
+---
+
+# Super Cli Workflow Feature Development Api And Ui
+
+## Action
+
+Follow the feature-development-api-and-ui workflow:
+1. Add or update core logic (e.g., readers) in src/core/
+2. Add or update API route in src/server/routes/
+3. Update or create React component in src/web/src/
+4. Update API client in src/web/src/api/client.ts
+5. Update styles in src/web/src/index.css
+6. Update documentation if needed
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: src/core/*.ts, src/server/routes/*.ts, src/web/src/*.tsx
+
+---
+id: super-cli-workflow-bugfix-backend-and-frontend
+trigger: "when doing bugfix backend and frontend"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/bluesky8318/super-cli
+---
+
+# Super Cli Workflow Bugfix Backend And Frontend
+
+## Action
+
+Follow the bugfix-backend-and-frontend workflow:
+1. Update backend logic in src/core/ or src/server/
+2. Update or add API route in src/server/routes/
+3. Update frontend logic or UI in src/web/src/
+4. Update API client in src/web/src/api/client.ts
+5. Update styles if necessary
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: src/core/*.ts, src/server/routes/*.ts, src/web/src/*.tsx
+
+---
+id: super-cli-workflow-documentation-update
+trigger: "when doing documentation update"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/bluesky8318/super-cli
+---
+
+# Super Cli Workflow Documentation Update
+
+## Action
+
+Follow the documentation-update workflow:
+1. Edit README.md to add or update feature lists and instructions
+2. Edit or merge CHANGELOG.md entries
+3. Edit other docs (e.g., AGENTS.md, CLAUDE.md) as needed
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: README.md, CHANGELOG.md, AGENTS.md
+
+---
+id: super-cli-workflow-project-metadata-and-publish-preparation
+trigger: "when doing project metadata and publish preparation"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/bluesky8318/super-cli
+---
+
+# Super Cli Workflow Project Metadata And Publish Preparation
+
+## Action
+
+Follow the project-metadata-and-publish-preparation workflow:
+1. Edit package.json fields (repository, homepage, scripts, license, etc.)
+2. Edit .gitignore and/or .npmignore
+3. Edit build config (e.g., tsup.config.ts)
+4. Update README.md license or metadata if needed
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: package.json, .gitignore, .npmignore
+
+---
+id: super-cli-instinct-file-naming-camelCase
+trigger: "When creating or renaming a file in the codebase"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: bluesky8318/super-cli
+---
+
+# Super Cli Instinct File Naming CamelCase
+
+## Action
+
+Name the file using camelCase (e.g., hooksReader.ts)
+
+## Evidence
+
+- Pattern in files: src/core/hooks-reader.ts, src/core/mcp-reader.ts
+
+---
+id: super-cli-instinct-function-naming-camelCase
+trigger: "When defining a function"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: bluesky8318/super-cli
+---
+
+# Super Cli Instinct Function Naming CamelCase
+
+## Action
+
+Name the function using camelCase
+
+## Evidence
+
+- Pattern in TypeScript codebase, namingConventions.functions = camelCase
+
+---
+id: super-cli-instinct-class-naming-PascalCase
+trigger: "When defining a class"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: bluesky8318/super-cli
+---
+
+# Super Cli Instinct Class Naming PascalCase
+
+## Action
+
+Name the class using PascalCase
+
+## Evidence
+
+- Pattern in TypeScript codebase, namingConventions.classes = PascalCase
+
+---
+id: super-cli-instinct-constant-naming-SCREAMING_SNAKE_CASE
+trigger: "When defining a constant"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: bluesky8318/super-cli
+---
+
+# Super Cli Instinct Constant Naming SCREAMING_SNAKE_CASE
+
+## Action
+
+Name the constant using SCREAMING_SNAKE_CASE
+
+## Evidence
+
+- Pattern in TypeScript codebase, namingConventions.constants = SCREAMING_SNAKE_CASE
+
+---
+id: super-cli-instinct-import-style-relative
+trigger: "When importing modules within the project"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: bluesky8318/super-cli
+---
+
+# Super Cli Instinct Import Style Relative
+
+## Action
+
+Use relative import paths
+
+## Evidence
+
+- Pattern in code: importStyle = relative
+
+---
+id: super-cli-instinct-export-style-named
+trigger: "When exporting functions, classes, or constants"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: bluesky8318/super-cli
+---
+
+# Super Cli Instinct Export Style Named
+
+## Action
+
+Use named exports
+
+## Evidence
+
+- Pattern in code: exportStyle = named
+
+---
+id: super-cli-instinct-try-catch-error-handling
+trigger: "When handling errors in code"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: bluesky8318/super-cli
+---
+
+# Super Cli Instinct Try Catch Error Handling
+
+## Action
+
+Use try-catch blocks for error handling
+
+## Evidence
+
+- Pattern in code: errorHandling.style = try-catch
+
+---
+id: super-cli-instinct-test-location-separate
+trigger: "When adding tests for new or existing features"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: bluesky8318/super-cli
+---
+
+# Super Cli Instinct Test Location Separate
+
+## Action
+
+Place test files in a separate test directory, not alongside source files
+
+## Evidence
+
+- architecture.folderStructure.testLocation = separate
+
+---
+id: super-cli-instinct-feature-dev-test-after-implementation
+trigger: "When implementing a new feature"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: bluesky8318/super-cli
+---
+
+# Super Cli Instinct Feature Dev Test After Implementation
+
+## Action
+
+Add tests for the feature after implementing it
+
+## Evidence
+
+- feature-development.commitSequence includes 'Add tests for feature' after implementation
+
+---
+id: super-cli-instinct-git-conventional-commits
+trigger: "When writing a commit message"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: bluesky8318/super-cli
+---
+
+# Super Cli Instinct Git Conventional Commits
+
+## Action
+
+Format the commit message using the conventional commits style (e.g., feat:, fix:, docs:, refactor:, chore:)
+
+## Evidence
+
+- Pattern in commits: 'feat: add harness config viewer...'
+- commit prefixes: feat, fix, docs, refactor, chore
+
+---
+id: super-cli-instinct-git-commit-length
+trigger: "When composing a commit message"
+confidence: 0.7
+domain: git
+source: repo-analysis
+source_repo: bluesky8318/super-cli
+---
+
+# Super Cli Instinct Git Commit Length
+
+## Action
+
+Keep the commit message concise, around 48 characters on average
+
+## Evidence
+
+- commits.averageLength = 48
+
+---
+id: super-cli-instinct-workflow-feature-development-api-ui
+trigger: "When adding a new feature that requires both backend and frontend changes"
+confidence: 0.95
+domain: workflow
+source: repo-analysis
+source_repo: bluesky8318/super-cli
+---
+
+# Super Cli Instinct Workflow Feature Development Api Ui
+
+## Action
+
+Follow the sequence: update core logic in src/core/, update API route in src/server/routes/, update/create React component in src/web/src/, update API client in src/web/src/api/client.ts, update styles in src/web/src/index.css, update documentation if needed
+
+## Evidence
+
+- workflow: feature-development-api-and-ui
+- filesInvolved: src/core/*.ts, src/server/routes/*.ts, src/web/src/*.tsx, src/web/src/api/client.ts, src/web/src/index.css
+
+---
+id: super-cli-instinct-workflow-bugfix-backend-frontend
+trigger: "When fixing a bug that affects both backend and frontend"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: bluesky8318/super-cli
+---
+
+# Super Cli Instinct Workflow Bugfix Backend Frontend
+
+## Action
+
+Update backend logic, API route, frontend UI or logic, API client, and styles if necessary
+
+## Evidence
+
+- workflow: bugfix-backend-and-frontend
+- filesInvolved: src/core/*.ts, src/server/routes/*.ts, src/web/src/*.tsx, src/web/src/api/client.ts, src/web/src/index.css
+
+---
+id: super-cli-instinct-workflow-documentation-update
+trigger: "When documenting new changes or preparing release notes"
+confidence: 0.95
+domain: workflow
+source: repo-analysis
+source_repo: bluesky8318/super-cli
+---
+
+# Super Cli Instinct Workflow Documentation Update
+
+## Action
+
+Edit README.md, CHANGELOG.md, and other docs (e.g., AGENTS.md, CLAUDE.md) as needed
+
+## Evidence
+
+- workflow: documentation-update
+- filesInvolved: README.md, CHANGELOG.md, AGENTS.md, CLAUDE.md
+
+---
+id: super-cli-instinct-workflow-project-metadata-publish
+trigger: "When preparing for npm publish or updating project metadata"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: bluesky8318/super-cli
+---
+
+# Super Cli Instinct Workflow Project Metadata Publish
+
+## Action
+
+Edit package.json, .gitignore/.npmignore, build config (e.g., tsup.config.ts), and update README.md license or metadata if needed
+
+## Evidence
+
+- workflow: project-metadata-and-publish-preparation
+- filesInvolved: package.json, .gitignore, .npmignore, tsup.config.ts, README.md
+
