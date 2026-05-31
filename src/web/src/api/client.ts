@@ -229,3 +229,17 @@ export async function refreshCache() {
   const res = await fetch(`${API_BASE}/refresh`, { method: 'POST' });
   return res.json();
 }
+
+export async function fetchProjectFiles(encoded: string, path: string = '') {
+  const url = new URL(`${API_BASE}/projects/${encodeURIComponent(encoded)}/files`, window.location.origin);
+  if (path) url.searchParams.set('path', path);
+  const res = await fetch(url.toString());
+  return res.json();
+}
+
+export async function fetchProjectFileContent(encoded: string, path: string) {
+  const url = new URL(`${API_BASE}/projects/${encodeURIComponent(encoded)}/files/content`, window.location.origin);
+  url.searchParams.set('path', path);
+  const res = await fetch(url.toString());
+  return res.json();
+}
