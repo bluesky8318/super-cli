@@ -176,3 +176,35 @@ export interface DailyStats {
   sessionCount: number;
   toolCallCount: number;
 }
+
+export interface SkillInfo {
+  id: string;
+  name: string;
+  version?: string;
+  description?: string;
+  provider: CliProvider;
+  scope: 'global' | 'project';
+  directory: string;
+}
+
+export interface McpServerInfo {
+  id: string;
+  name: string;
+  type: 'stdio' | 'http' | 'sse';
+  command?: string;
+  args?: string[];
+  url?: string;
+  env?: Record<string, string>;
+  provider: CliProvider;
+  scope: 'global' | 'project';
+  status?: 'healthy' | 'unhealthy' | 'unknown';
+}
+
+export interface RuleFile {
+  id: string;
+  name: string;
+  path: string;
+  provider: CliProvider;
+  scope: 'global' | 'project';
+  exists: boolean;
+}

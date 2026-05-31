@@ -41,10 +41,27 @@ export class TerminalLauncher {
     }
 
     const providerConfig = getProvider(provider);
-    const cmd = providerConfig.command;
+    const cmd = providerConfig.newArgs.length
+      ? `${providerConfig.command} ${providerConfig.newArgs.join(' ')}`
+      : providerConfig.command;
 
     try {
       await this.launchInTerminal(terminal, cmd, cwd);
+      return { action: 'launched', terminal };
+    } catch (err: any) {
+      return { action: 'error', message: err.message ?? String(err) };
+    }
+  }
+
+  async openDirectory(cwd: string): Promise<LaunchResult> {
+    const terminal = await this.getTerminal();
+
+    if (!existsSync(cwd)) {
+      return { action: 'error', message: `路径不存在: ${cwd}` };
+    }
+
+    try {
+      await this.launchInTerminal(terminal, '', cwd);
       return { action: 'launched', terminal };
     } catch (err: any) {
       return { action: 'error', message: err.message ?? String(err) };
@@ -68,8 +85,14 @@ export class TerminalLauncher {
   }
 
   private async launchInTerminal(terminal: TerminalType, cmd: string, cwd?: string): Promise<void> {
-    const cdPrefix = cwd ? `cd ${this.shellEscape(cwd)} && ` : '';
-    const fullCmd = `${cdPrefix}${cmd}`;
+    let fullCmd: string;
+    if (cwd && cmd) {
+      fullCmd = `cd ${this.shellEscape(cwd)} && ${cmd}`;
+    } else if (cwd) {
+      fullCmd = `cd ${this.shellEscape(cwd)} && exec zsh`;
+    } else {
+      fullCmd = cmd;
+    }
     const asEscaped = fullCmd.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
     switch (terminal) {
