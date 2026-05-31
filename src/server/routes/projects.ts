@@ -7,8 +7,7 @@ import { getProjectDetail } from '../../core/project-info.js';
 import { getAvailableProviders } from '../../core/providers.js';
 import { TerminalLauncher } from '../../core/terminal-launcher.js';
 
-export function registerProjectRoutes(app: FastifyInstance): void {
-  const index = new SessionIndex();
+export function registerProjectRoutes(app: FastifyInstance, index: SessionIndex): void {
   const archive = new ProjectArchive();
 
   app.get('/api/providers', async () => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { fetchSessions, fetchProjects, fetchSessionMessages, fetchTasks, resumeSession, createNewSession, fetchProjectDetail, archiveProject, unarchiveProject, pinProject, unpinProject, fetchProviders, openProjectInFinder, openProjectInTerminal } from './api/client.js';
+import { fetchSessions, fetchProjects, fetchSessionMessages, fetchTasks, resumeSession, createNewSession, fetchProjectDetail, archiveProject, unarchiveProject, pinProject, unpinProject, fetchProviders, openProjectInFinder, openProjectInTerminal, refreshCache } from './api/client.js';
 import ConfigView from './ConfigView.js';
 import './index.css';
 
@@ -133,6 +133,7 @@ export default function App() {
   const [resizing, setResizing] = useState(false);
   const [tooltip, setTooltip] = useState<{ session: SessionItem; x: number; y: number } | null>(null);
   const [resumeStatus, setResumeStatus] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [archivedCollapsed, setArchivedCollapsed] = useState(true);
   const [providerDropdownOpen, setProviderDropdownOpen] = useState(false);
   const [newTaskDropdownOpen, setNewTaskDropdownOpen] = useState(false);
@@ -329,6 +330,26 @@ export default function App() {
     const result = await createNewSession(selectedProject, provider);
     if (result.action === 'error') {
       alert(result.message ?? '启动失败');
+    }
+  }
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      await refreshCache();
+      const providerParam = selectedProviders.length === 1 ? { provider: selectedProviders[0] } : undefined;
+      const [sessData, projData] = await Promise.all([
+        fetchSessions({
+          ...(providerParam ? { provider: providerParam.provider } : {}),
+          ...(selectedProject ? { project: selectedProject } : {}),
+          limit: '200',
+        }),
+        fetchProjects(providerParam),
+      ]);
+      setSessions(sessData.sessions ?? []);
+      setProjects(projData.projects ?? []);
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -586,6 +607,9 @@ export default function App() {
             )}
           </div>
           <div className="toolbar-right">
+            <button className={`refresh-btn ${refreshing ? 'spinning' : ''}`} onClick={handleRefresh} disabled={refreshing} title="刷新数据">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </button>
             <div className="search-box">
               <svg className="search-icon" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd"/></svg>
               <input type="text" placeholder="搜索任务..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
