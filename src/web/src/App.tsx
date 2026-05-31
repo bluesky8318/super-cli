@@ -1,6 +1,24 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { fetchSessions, fetchProjects, fetchSessionMessages, fetchTasks, resumeSession, createNewSession, fetchProjectDetail, archiveProject, unarchiveProject, pinProject, unpinProject, fetchProviders, openProjectInFinder, openProjectInTerminal, refreshCache } from './api/client.js';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { fetchSessions, fetchProjects, fetchSessionMessages, fetchTasks, resumeSession, createNewSession, fetchProjectDetail, archiveProject, unarchiveProject, pinProject, unpinProject, fetchProviders, openProjectInFinder, openProjectInTerminal, refreshCache, fetchProjectFiles, fetchProjectFileContent } from './api/client.js';
 import ConfigView from './ConfigView.js';
+import Prism from 'prismjs';
+import 'prismjs/components/prism-typescript.js';
+import 'prismjs/components/prism-jsx.js';
+import 'prismjs/components/prism-tsx.js';
+import 'prismjs/components/prism-json.js';
+import 'prismjs/components/prism-css.js';
+import 'prismjs/components/prism-bash.js';
+import 'prismjs/components/prism-python.js';
+import 'prismjs/components/prism-yaml.js';
+import 'prismjs/components/prism-toml.js';
+import 'prismjs/components/prism-markdown.js';
+import 'prismjs/components/prism-sql.js';
+import 'prismjs/components/prism-rust.js';
+import 'prismjs/components/prism-go.js';
+import 'prismjs/components/prism-java.js';
+import 'prismjs/components/prism-docker.js';
+import 'prismjs/themes/prism-tomorrow.css';
+import { marked } from 'marked';
 import './index.css';
 
 type Theme = 'light' | 'dark' | 'deep';
@@ -138,6 +156,7 @@ export default function App() {
   const [providerDropdownOpen, setProviderDropdownOpen] = useState(false);
   const [newTaskDropdownOpen, setNewTaskDropdownOpen] = useState(false);
   const [projectDetail, setProjectDetail] = useState<ProjectDetailData | null>(null);
+  const [overlayTab, setOverlayTab] = useState<'detail' | 'files'>('detail');
   const [contextMenu, setContextMenu] = useState<{ encoded: string; decoded: string; pinned: boolean; archived: boolean; x: number; y: number } | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('sidebar-width');
@@ -323,6 +342,7 @@ export default function App() {
     e?.stopPropagation();
     const data = await fetchProjectDetail(encoded);
     setProjectDetail(data);
+    setOverlayTab('detail');
   }
 
   async function handleNewTask(provider: CliProvider = 'claude-code') {
@@ -782,12 +802,17 @@ export default function App() {
 
       {/* Project Detail Overlay */}
       {projectDetail && (
-        <div className="overlay-backdrop" onClick={() => setProjectDetail(null)}>
-          <div className="overlay-panel" onClick={e => e.stopPropagation()}>
+        <div className="overlay-backdrop" onClick={() => { setProjectDetail(null); setOverlayTab('detail'); }}>
+          <div className={`overlay-panel ${overlayTab === 'files' ? 'overlay-panel-wide' : ''}`} onClick={e => e.stopPropagation()}>
             <div className="overlay-header">
               <h3>{projectDetail.decoded.split('/').slice(-2).join('/')}</h3>
-              <button className="close-btn" onClick={() => setProjectDetail(null)}>✕</button>
+              <div className="overlay-tabs">
+                <button className={`overlay-tab ${overlayTab === 'detail' ? 'active' : ''}`} onClick={() => setOverlayTab('detail')}>详情</button>
+                <button className={`overlay-tab ${overlayTab === 'files' ? 'active' : ''}`} onClick={() => setOverlayTab('files')}>文件</button>
+              </div>
+              <button className="close-btn" onClick={() => { setProjectDetail(null); setOverlayTab('detail'); }}>✕</button>
             </div>
+            {overlayTab === 'detail' ? (
             <div className="overlay-body">
               <MetaItem label="路径" value={projectDetail.diskPath} />
               <MetaItem label="状态" value={projectDetail.pathExists ? '路径存在' : '路径不存在'} />
@@ -803,7 +828,37 @@ export default function App() {
               {projectDetail.packageManager && <MetaItem label="包管理器" value={projectDetail.packageManager} />}
               <MetaItem label="会话数" value={String(projectDetail.sessionCount)} />
               {projectDetail.lastTimestamp && <MetaItem label="最近活跃" value={new Date(projectDetail.lastTimestamp).toLocaleString('zh-CN')} />}
+
+              <div className="overlay-actions">
+                <button className="overlay-action-btn" onClick={() => handleOpenFinder(projectDetail.encoded)}>
+                  <IconFolder /> 在 Finder 中打开
+                </button>
+                <button className="overlay-action-btn" onClick={() => handleOpenTerminal(projectDetail.encoded)}>
+                  <IconTerminal /> 在终端中打开
+                </button>
+                {projects.find(p => p.encoded === projectDetail.encoded)?.pinned ? (
+                  <button className="overlay-action-btn" onClick={() => handleUnpin(projectDetail.encoded)}>
+                    <IconPinOff /> 取消置顶
+                  </button>
+                ) : (
+                  <button className="overlay-action-btn" onClick={() => handlePin(projectDetail.encoded)}>
+                    <IconPin /> 置顶
+                  </button>
+                )}
+                {projects.find(p => p.encoded === projectDetail.encoded)?.archived ? (
+                  <button className="overlay-action-btn" onClick={() => handleUnarchive(projectDetail.encoded)}>
+                    <IconArchiveRestore /> 取消归档
+                  </button>
+                ) : (
+                  <button className="overlay-action-btn" onClick={() => handleArchive(projectDetail.encoded)}>
+                    <IconArchive /> 归档
+                  </button>
+                )}
+              </div>
             </div>
+            ) : (
+            <FileBrowser encoded={projectDetail.encoded} />
+            )}
           </div>
         </div>
       )}
@@ -1025,4 +1080,206 @@ function IconFolder() {
 
 function IconTerminal() {
   return <svg {...iconProps}><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>;
+}
+
+interface DirEntry {
+  name: string;
+  type: 'dir' | 'file';
+  size?: number;
+  extension?: string;
+}
+
+interface FileContentData {
+  path: string;
+  content: string | null;
+  binary: boolean;
+  truncated: boolean;
+  size: number;
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const EXT_TO_LANG: Record<string, string> = {
+  ts: 'typescript', tsx: 'tsx', js: 'jsx', jsx: 'jsx', mjs: 'jsx',
+  json: 'json', css: 'css', scss: 'css', less: 'css',
+  sh: 'bash', bash: 'bash', zsh: 'bash',
+  py: 'python', yml: 'yaml', yaml: 'yaml', toml: 'toml',
+  md: 'markdown', mdx: 'markdown',
+  sql: 'sql', rs: 'rust', go: 'go', java: 'java',
+  dockerfile: 'docker',
+  html: 'markup', xml: 'markup', svg: 'markup',
+  graphql: 'typescript', gql: 'typescript',
+};
+
+function getLang(filePath: string): string | undefined {
+  const name = filePath.split('/').pop()!.toLowerCase();
+  if (name === 'dockerfile') return 'docker';
+  if (name === 'makefile') return 'bash';
+  if (name.endsWith('.d.ts')) return 'typescript';
+  const ext = name.split('.').pop()!;
+  return EXT_TO_LANG[ext];
+}
+
+function highlightCode(code: string, filePath: string): string {
+  const lang = getLang(filePath);
+  if (!lang) return escapeHtml(code);
+  const grammar = Prism.languages[lang];
+  if (!grammar) return escapeHtml(code);
+  return Prism.highlight(code, grammar, lang);
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderMarkdown(md: string): string {
+  return marked.parse(md, { async: false }) as string;
+}
+
+function FileBrowser({ encoded }: { encoded: string }) {
+  const [treeCache, setTreeCache] = useState<Map<string, DirEntry[]>>(new Map());
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [fileContent, setFileContent] = useState<FileContentData | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetchProjectFiles(encoded, '').then((data: any) => {
+      setTreeCache(new Map([['', data.entries ?? []]]));
+    });
+  }, [encoded]);
+
+  async function toggleDir(dirPath: string) {
+    setExpandedDirs(prev => {
+      const next = new Set(prev);
+      if (next.has(dirPath)) next.delete(dirPath);
+      else next.add(dirPath);
+      return next;
+    });
+    if (!treeCache.has(dirPath)) {
+      const data = await fetchProjectFiles(encoded, dirPath);
+      setTreeCache(prev => new Map(prev).set(dirPath, data.entries ?? []));
+    }
+  }
+
+  async function selectFile(filePath: string) {
+    setSelectedFile(filePath);
+    setLoading(true);
+    try {
+      const data = await fetchProjectFileContent(encoded, filePath);
+      setFileContent(data);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="file-browser">
+      <div className="file-tree">
+        <TreeNode
+          path=""
+          entries={treeCache.get('') ?? []}
+          level={0}
+          expandedDirs={expandedDirs}
+          selectedFile={selectedFile}
+          treeCache={treeCache}
+          onToggleDir={toggleDir}
+          onSelectFile={selectFile}
+        />
+      </div>
+      <div className="file-preview">
+        {loading ? (
+          <div className="file-preview-empty">加载中...</div>
+        ) : !selectedFile ? (
+          <div className="file-preview-empty">选择文件查看内容</div>
+        ) : fileContent?.binary ? (
+          <div className="file-preview-binary">
+            <IconFileBinary />
+            <span>二进制文件</span>
+            <span className="file-preview-size">{formatSize(fileContent.size)}</span>
+          </div>
+        ) : fileContent ? (
+          <>
+            <div className="file-preview-header">
+              <span className="file-preview-path">{fileContent.path}</span>
+              <span className="file-preview-size">{formatSize(fileContent.size)}</span>
+            </div>
+            {fileContent.truncated && (
+              <div className="file-truncation-banner">文件过大，仅显示前 100KB（共 {formatSize(fileContent.size)}）</div>
+            )}
+            {getLang(fileContent.path) === 'markdown' ? (
+              <div className="file-md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(fileContent.content ?? '') }} />
+            ) : (
+              <pre className="file-content-pre"><code dangerouslySetInnerHTML={{ __html: highlightCode(fileContent.content ?? '', fileContent.path) }} /></pre>
+            )}
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function TreeNode({ path, entries, level, expandedDirs, selectedFile, treeCache, onToggleDir, onSelectFile }: {
+  path: string;
+  entries: DirEntry[];
+  level: number;
+  expandedDirs: Set<string>;
+  selectedFile: string | null;
+  treeCache: Map<string, DirEntry[]>;
+  onToggleDir: (path: string) => void;
+  onSelectFile: (path: string) => void;
+}) {
+  return (
+    <div>
+      {entries.map(entry => {
+        const fullPath = path ? `${path}/${entry.name}` : entry.name;
+        const isExpanded = expandedDirs.has(fullPath);
+        const isSelected = selectedFile === fullPath;
+        const children = treeCache.get(fullPath);
+        return (
+          <div key={fullPath}>
+            <div
+              className={`file-tree-item ${isSelected ? 'selected' : ''}`}
+              style={{ paddingLeft: level * 16 + 8 }}
+              onClick={() => entry.type === 'dir' ? onToggleDir(fullPath) : onSelectFile(fullPath)}
+            >
+              {entry.type === 'dir' ? (
+                <>
+                  <span className={`tree-chevron ${isExpanded ? 'expanded' : ''}`}>▶</span>
+                  <IconFolder />
+                </>
+              ) : (
+                <IconFile />
+              )}
+              <span className="tree-name">{entry.name}</span>
+            </div>
+            {entry.type === 'dir' && isExpanded && children && (
+              <TreeNode
+                path={fullPath}
+                entries={children}
+                level={level + 1}
+                expandedDirs={expandedDirs}
+                selectedFile={selectedFile}
+                treeCache={treeCache}
+                onToggleDir={onToggleDir}
+                onSelectFile={onSelectFile}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function IconFile() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>;
+}
+
+function IconFileBinary() {
+  return <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/></svg>;
 }
