@@ -1,10 +1,27 @@
 {
   "name": "super-cli",
   "version": "0.1.0",
-  "description": "Claude Code session management CLI tool",
+  "description": "AI coding assistant session manager for Claude Code, Qoder, and Codex",
   "type": "module",
   "bin": {
     "super-cli": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist/cli",
+    "dist/server",
+    "dist/web",
+    "dist/chunk-*.js",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bluesky8318/super-cli.git"
+  },
+  "homepage": "https://github.com/bluesky8318/super-cli#readme",
+  "bugs": {
+    "url": "https://github.com/bluesky8318/super-cli/issues"
   },
   "scripts": {
     "build": "pnpm build:cli && pnpm build:web",
@@ -14,7 +31,8 @@
     "dev:web": "vite dev --config src/web/vite.config.ts",
     "test": "vitest",
     "start": "node dist/cli/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
   },
   "keywords": [
     "claude",
