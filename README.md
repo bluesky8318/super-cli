@@ -158,4 +158,4 @@ pnpm start        # 运行构建产物
 
 ## License
 
-MIT
+Apache-2.0
