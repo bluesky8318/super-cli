@@ -45,15 +45,14 @@ AI 编程助手 session 管理工具。统一管理 Claude Code、Qoder、Codex 
 ## 安装
 
 ```bash
-pnpm install
-pnpm build
+npm install -g @bluesky8318/super-cli
 ```
 
-全局使用：
+或本地开发：
 
 ```bash
-pnpm install -g .
-# 或 link 到全局
+pnpm install
+pnpm build
 pnpm link --global
 ```
 
