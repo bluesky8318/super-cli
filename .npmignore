@@ -1,0 +1,8 @@
+**/*.map
+src/
+tsup.config.ts
+tsconfig.json
+src/web/
+AGENTS.md
+CLAUDE.md
+.qoder/
