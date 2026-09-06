@@ -211,7 +211,9 @@ export class CodexReader {
           if (meta.git?.branch) metadata.gitBranch = meta.git.branch;
           if (meta.cli_version) metadata.version = meta.cli_version;
           metadata.entrypoint = 'cli';
-          if (!metadata.firstTimestamp) metadata.firstTimestamp = parsed.timestamp;
+          if (!metadata.firstTimestamp && parsed.timestamp) {
+            metadata.firstTimestamp = typeof parsed.timestamp === 'number' ? new Date(parsed.timestamp).toISOString() : String(parsed.timestamp);
+          }
         }
 
         if (parsed.type === 'turn_context' && parsed.payload?.model) {
@@ -220,7 +222,9 @@ export class CodexReader {
 
         if (parsed.type === 'response_item' && parsed.payload?.role) {
           metadata.messageCount++;
-          metadata.lastTimestamp = parsed.timestamp;
+          if (parsed.timestamp) {
+            metadata.lastTimestamp = typeof parsed.timestamp === 'number' ? new Date(parsed.timestamp).toISOString() : String(parsed.timestamp);
+          }
 
           if (parsed.payload.role === 'user') {
             metadata.userMessageCount++;

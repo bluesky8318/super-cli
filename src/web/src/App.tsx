@@ -25,7 +25,7 @@ type Theme = 'light' | 'dark' | 'deep';
 type ViewMode = 'board' | 'card' | 'list';
 type SortMode = 'time-desc' | 'time-asc' | 'messages';
 type SessionStatus = 'backlog' | 'in_progress' | 'review' | 'done' | 'cancelled';
-type CliProvider = 'claude-code' | 'qoder' | 'codex';
+type CliProvider = 'claude-code' | 'qoder' | 'codex' | 'kimi' | 'pi' | 'opencode' | 'workbuddy' | 'traecode';
 
 const STATUS_COLUMNS: { key: SessionStatus; label: string; color: string }[] = [
   { key: 'in_progress', label: '进行中', color: '#3b82f6' },

@@ -81,8 +81,9 @@ export class SessionReader {
       metadata.messageCount++;
 
       if (msg.timestamp) {
-        if (!metadata.firstTimestamp) metadata.firstTimestamp = msg.timestamp;
-        metadata.lastTimestamp = msg.timestamp;
+        const tsStr = typeof msg.timestamp === 'number' ? new Date(msg.timestamp).toISOString() : String(msg.timestamp);
+        if (!metadata.firstTimestamp) metadata.firstTimestamp = tsStr;
+        metadata.lastTimestamp = tsStr;
       }
 
       if (msg.cwd && !metadata.cwd) metadata.cwd = msg.cwd;

@@ -19,7 +19,7 @@ AI 编程助手 session 管理工具。统一管理 Claude Code、Qoder、Codex�
 - 左侧项目导航，支持置顶、归档、展开/折叠
 - 右键菜单：在 Finder 中打开、在终端中打开、查看详情
 - 项目详情浮层：元数据展示 + 操作按钮 + 文件浏览器
-- 新建任务时可选择 CLI 工具（Claude Code / Qoder / Codex）
+- 新建任务时可选择 CLI 工具（Claude Code / Qoder / Codex / Kimi CLI / Pi / OpenCode / WorkBuddy / TraeCode）
 
 **文件浏览器**
 - 在项目详情浮层中浏览项目文件（只读）
@@ -97,7 +97,7 @@ super-cli config path
 
 所有命令支持 `--json` 输出，方便集成到 agent 工作流。
 
-全局 `--provider` 参数可过滤特定 CLI 工具：
+全局 `--provider` 参数可过滤特定 CLI 工具（如 `claude-code`, `qoder`, `codex`, `kimi`, `pi`, `opencode`, `workbuddy`, `traecode`）：
 
 ```bash
 super-cli --provider claude-code list

@@ -6,7 +6,7 @@ import {
   fetchHooks, fetchPermissions,
 } from './api/client.js';
 
-type CliProvider = 'claude-code' | 'qoder' | 'codex';
+type CliProvider = 'claude-code' | 'qoder' | 'codex' | 'kimi' | 'pi' | 'opencode' | 'workbuddy' | 'traecode';
 type ConfigTab = 'skills' | 'mcp' | 'rules' | 'hooks' | 'permissions';
 
 interface ProviderInfo {
@@ -416,6 +416,11 @@ function McpView({ providers, activeProviders, selectedProject }: { providers: P
     'claude-code': '~/.claude',
     'qoder': '~/.qoder',
     'codex': '~/.codex',
+    'kimi': '~/.kimi',
+    'pi': '~/.pi',
+    'opencode': '~/.opencode',
+    'workbuddy': '~/.workbuddy',
+    'traecode': '~/.traecode',
   };
 
   const groupedByProvider = activeProviders

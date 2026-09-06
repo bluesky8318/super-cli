@@ -1,0 +1,258 @@
+{
+  "id": "2026-09-06-223335",
+  "generated_at": "2026-09-06T14:33:35.589341Z",
+  "language": "zh",
+  "pages": [
+    {
+      "slug": "1-xiang-mu-zong-lan-super-cli-shi-shi-yao-jie-jue-shi-yao-wen-ti",
+      "title": "项目总览：super-cli 是什么，解决什么问题",
+      "file": "1-xiang-mu-zong-lan-super-cli-shi-shi-yao-jie-jue-shi-yao-wen-ti.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "2-kuai-su-shang-shou-an-zhuang-shou-ci-yun-xing-yu-ji-chu-ming-ling",
+      "title": "快速上手：安装、首次运行与基础命令",
+      "file": "2-kuai-su-shang-shou-an-zhuang-shou-ci-yun-xing-yu-ji-chu-ming-ling.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "3-cli-ming-ling-shi-zhan-list-show-search-name-tasks-stats-config",
+      "title": "CLI 命令实战：list / show / search / name / tasks / stats / config",
+      "file": "3-cli-ming-ling-shi-zhan-list-show-search-name-tasks-stats-config.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "4-web-dashboard-shi-yong-zhi-nan-kan-ban-sou-suo-xiang-mu-xiang-qing-yu-harness-shi-tu",
+      "title": "Web Dashboard 使用指南：看板、搜索、项目详情与 Harness 视图",
+      "file": "4-web-dashboard-shi-yong-zhi-nan-kan-ban-sou-suo-xiang-mu-xiang-qing-yu-harness-shi-tu.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "5-kai-fa-huan-jing-da-jian-pnpm-re-zhong-zai-kai-fa-liu-cheng-yu-chang-yong-jiao-ben",
+      "title": "开发环境搭建：pnpm、热重载开发流程与常用脚本",
+      "file": "5-kai-fa-huan-jing-da-jian-pnpm-re-zhong-zai-kai-fa-liu-cheng-yu-chang-yong-jiao-ben.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "6-san-ceng-jia-gou-jie-xi-core-gong-xiang-shu-ju-ceng-ru-he-tong-shi-fu-wu-cli-yu-server",
+      "title": "三层架构解析：core 共享数据层如何同时服务 CLI 与 Server",
+      "file": "6-san-ceng-jia-gou-jie-xi-core-gong-xiang-shu-ju-ceng-ru-he-tong-shi-fu-wu-cli-yu-server.md",
+      "section": "深入解析",
+      "group": "整体架构与数据模型",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "7-gong-xiang-lei-xing-xi-tong-sessionmessage-sessionmetadata-yu-he-xin-shu-ju-mo-xing",
+      "title": "共享类型系统：SessionMessage、SessionMetadata 与核心数据模型",
+      "file": "7-gong-xiang-lei-xing-xi-tong-sessionmessage-sessionmetadata-yu-he-xin-shu-ju-mo-xing.md",
+      "section": "深入解析",
+      "group": "整体架构与数据模型",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "8-wu-shu-ju-ku-she-ji-zhe-xue-zhi-du-jsonl-yu-wei-ke-xie-dian-super-cli-config-json",
+      "title": "无数据库设计哲学：直读 JSONL 与唯一可写点 ~/.super-cli/config.json",
+      "file": "8-wu-shu-ju-ku-she-ji-zhe-xue-zhi-du-jsonl-yu-wei-ke-xie-dian-super-cli-config-json.md",
+      "section": "深入解析",
+      "group": "整体架构与数据模型",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "9-provider-zhu-ce-biao-ba-kuan-ai-cli-gong-ju-de-tong-chou-xiang",
+      "title": "Provider 注册表：八款 AI CLI 工具的统一抽象",
+      "file": "9-provider-zhu-ce-biao-ba-kuan-ai-cli-gong-ju-de-tong-chou-xiang.md",
+      "section": "深入解析",
+      "group": "多 Provider 适配机制",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "10-jsonl-liu-shi-jie-xi-yin-qing-readline-zhu-xing-du-qu-yu-yuan-shu-ju-ti-qu",
+      "title": "JSONL 流式解析引擎：readline 逐行读取与元数据提取",
+      "file": "10-jsonl-liu-shi-jie-xi-yin-qing-readline-zhu-xing-du-qu-yu-yuan-shu-ju-ti-qu.md",
+      "section": "深入解析",
+      "group": "多 Provider 适配机制",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "11-codexreader-chai-yi-hua-shi-xian-rollout-wen-jian-ge-shi-yu-isessionreader-jie-kou",
+      "title": "CodexReader 差异化实现：rollout 文件格式与 ISessionReader 接口",
+      "file": "11-codexreader-chai-yi-hua-shi-xian-rollout-wen-jian-ge-shi-yu-isessionreader-jie-kou.md",
+      "section": "深入解析",
+      "group": "多 Provider 适配机制",
+      "level": "Advanced"
+    },
+    {
+      "slug": "12-xiang-mu-lu-jing-bian-ma-gui-ze-encodeprojectpath-yu-mu-lu-ding-wei",
+      "title": "项目路径编码规则：encodeProjectPath 与目录定位",
+      "file": "12-xiang-mu-lu-jing-bian-ma-gui-ze-encodeprojectpath-yu-mu-lu-ding-wei.md",
+      "section": "深入解析",
+      "group": "多 Provider 适配机制",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "13-sessionindex-nei-cun-suo-yin-ttl-huan-cun-yu-qiang-zhi-shua-xin-ce-lue",
+      "title": "SessionIndex 内存索引：TTL 缓存与强制刷新策略",
+      "file": "13-sessionindex-nei-cun-suo-yin-ttl-huan-cun-yu-qiang-zhi-shua-xin-ce-lue.md",
+      "section": "深入解析",
+      "group": "索引、搜索与任务管理",
+      "level": "Advanced"
+    },
+    {
+      "slug": "14-kua-session-quan-wen-sou-suo-ming-zhong-ju-he-yu-gao-liang-shi-xian",
+      "title": "跨 Session 全文搜索：命中聚合与高亮实现",
+      "file": "14-kua-session-quan-wen-sou-suo-ming-zhong-ju-he-yu-gao-liang-shi-xian.md",
+      "section": "深入解析",
+      "group": "索引、搜索与任务管理",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "15-session-zhuang-tai-zi-dong-tui-duan-biao-qian-you-xian-ji-yu-huo-yue-jian-ce-suan-fa",
+      "title": "Session 状态自动推断：标签优先级与活跃检测算法",
+      "file": "15-session-zhuang-tai-zi-dong-tui-duan-biao-qian-you-xian-ji-yu-huo-yue-jian-ce-suan-fa.md",
+      "section": "深入解析",
+      "group": "索引、搜索与任务管理",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "16-taskstore-ren-wu-biao-qian-xi-tong-ming-ming-da-biao-qian-yu-json-chi-jiu-hua",
+      "title": "TaskStore 任务标签系统：命名、打标签与 JSON 持久化",
+      "file": "16-taskstore-ren-wu-biao-qian-xi-tong-ming-ming-da-biao-qian-yu-json-chi-jiu-hua.md",
+      "section": "深入解析",
+      "group": "索引、搜索与任务管理",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "17-xiang-mu-gui-dang-yu-zhi-ding-projectarchive-de-shi-xian",
+      "title": "项目归档与置顶：ProjectArchive 的实现",
+      "file": "17-xiang-mu-gui-dang-yu-zhi-ding-projectarchive-de-shi-xian.md",
+      "section": "深入解析",
+      "group": "索引、搜索与任务管理",
+      "level": "Beginner"
+    },
+    {
+      "slug": "18-fastify-rest-api-can-kao-api-sessions-api-tasks-api-projects-deng-duan-dian",
+      "title": "Fastify REST API 参考：/api/sessions、/api/tasks、/api/projects 等端点",
+      "file": "18-fastify-rest-api-can-kao-api-sessions-api-tasks-api-projects-deng-duan-dian.md",
+      "section": "深入解析",
+      "group": "REST 服务层",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "19-jing-tai-zi-yuan-tuo-guan-yu-spa-hui-tui-dist-web-yu-setnotfoundhandler",
+      "title": "静态资源托管与 SPA 回退：dist/web 与 setNotFoundHandler",
+      "file": "19-jing-tai-zi-yuan-tuo-guan-yu-spa-hui-tui-dist-web-yu-setnotfoundhandler.md",
+      "section": "深入解析",
+      "group": "REST 服务层",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "20-wen-jian-liu-lan-qi-api-mu-lu-sao-miao-hu-lue-gui-ze-yu-er-jin-zhi-da-xiao-fang-hu",
+      "title": "文件浏览器 API：目录扫描、忽略规则与二进制/大小防护",
+      "file": "20-wen-jian-liu-lan-qi-api-mu-lu-sao-miao-hu-lue-gui-ze-yu-er-jin-zhi-da-xiao-fang-hu.md",
+      "section": "深入解析",
+      "group": "REST 服务层",
+      "level": "Advanced"
+    },
+    {
+      "slug": "21-harness-du-qu-qi-zong-lan-skills-mcp-servers-rules-hooks-permissions-de-jie-xi",
+      "title": "Harness 读取器总览：Skills、MCP Servers、Rules、Hooks、Permissions 的解析",
+      "file": "21-harness-du-qu-qi-zong-lan-skills-mcp-servers-rules-hooks-permissions-de-jie-xi.md",
+      "section": "深入解析",
+      "group": "Harness 配置体系",
+      "level": "Advanced"
+    },
+    {
+      "slug": "22-kua-provider-fu-zhi-pei-zhi-skill-qian-yi-yu-mcp-server-tong-bu-de-shi-xian",
+      "title": "跨 Provider 复制配置：Skill 迁移与 MCP Server 同步的实现",
+      "file": "22-kua-provider-fu-zhi-pei-zhi-skill-qian-yi-yu-mcp-server-tong-bu-de-shi-xian.md",
+      "section": "深入解析",
+      "group": "Harness 配置体系",
+      "level": "Advanced"
+    },
+    {
+      "slug": "23-app-tsx-dan-wen-jian-spa-jia-gou-1295-xing-de-zu-jian-hua-zu-zhi-zhi-dao",
+      "title": "App.tsx 单文件 SPA 架构：1295 行的组件化组织之道",
+      "file": "23-app-tsx-dan-wen-jian-spa-jia-gou-1295-xing-de-zu-jian-hua-zu-zhi-zhi-dao.md",
+      "section": "深入解析",
+      "group": "Web 前端实现",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "24-kan-ban-qia-pian-lie-biao-san-chong-shi-tu-yu-pai-xu-ri-qi-fen-zu-shi-xian",
+      "title": "看板 / 卡片 / 列表三种视图与排序、日期分组实现",
+      "file": "24-kan-ban-qia-pian-lie-biao-san-chong-shi-tu-yu-pai-xu-ri-qi-fen-zu-shi-xian.md",
+      "section": "深入解析",
+      "group": "Web 前端实现",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "25-dai-ma-gao-liang-yu-markdown-xuan-ran-prism-js-yu-marked-de-ji-cheng",
+      "title": "代码高亮与 Markdown 渲染：Prism.js 与 marked 的集成",
+      "file": "25-dai-ma-gao-liang-yu-markdown-xuan-ran-prism-js-yu-marked-de-ji-cheng.md",
+      "section": "深入解析",
+      "group": "Web 前端实现",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "26-duo-zhu-ti-xi-tong-liang-se-an-se-shen-lan-zhu-ti-qie-huan",
+      "title": "多主题系统：亮色 / 暗色 / 深蓝主题切换",
+      "file": "26-duo-zhu-ti-xi-tong-liang-se-an-se-shen-lan-zhu-ti-qie-huan.md",
+      "section": "深入解析",
+      "group": "Web 前端实现",
+      "level": "Beginner"
+    },
+    {
+      "slug": "27-qian-duan-api-ke-hu-duan-yu-vite-kai-fa-dai-li-pei-zhi",
+      "title": "前端 API 客户端与 Vite 开发代理配置",
+      "file": "27-qian-duan-api-ke-hu-duan-yu-vite-kai-fa-dai-li-pei-zhi.md",
+      "section": "深入解析",
+      "group": "Web 前端实现",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "28-macos-zhong-duan-qi-dong-qi-ghostty-iterm2-terminal-app-kitty-warp-de-hui-fu-hui-hua-shi-xian",
+      "title": "macOS 终端启动器：Ghostty、iTerm2、Terminal.app、Kitty、Warp 的恢复会话实现",
+      "file": "28-macos-zhong-duan-qi-dong-qi-ghostty-iterm2-terminal-app-kitty-warp-de-hui-fu-hui-hua-shi-xian.md",
+      "section": "深入解析",
+      "group": "系统集成与工程实践",
+      "level": "Advanced"
+    },
+    {
+      "slug": "29-gou-jian-ti-xi-tsup-da-bao-cli-server-yu-vite-gou-jian-web-de-shuang-gui-liu-cheng",
+      "title": "构建体系：tsup 打包 CLI/Server 与 Vite 构建 Web 的双轨流程",
+      "file": "29-gou-jian-ti-xi-tsup-da-bao-cli-server-yu-vite-gou-jian-web-de-shuang-gui-liu-cheng.md",
+      "section": "深入解析",
+      "group": "系统集成与工程实践",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "30-ce-shi-yu-lei-xing-jian-cha-vitest-shi-jian-yu-du-li-tsconfig-bian-jie",
+      "title": "测试与类型检查：Vitest 实践与独立 tsconfig 边界",
+      "file": "30-ce-shi-yu-lei-xing-jian-cha-vitest-shi-jian-yu-du-li-tsconfig-bian-jie.md",
+      "section": "深入解析",
+      "group": "系统集成与工程实践",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "31-agent-xie-zuo-yue-ding-agents-md-gui-fan-yu-bian-ma-yue-ding",
+      "title": "Agent 协作约定：AGENTS.md 规范与编码约定",
+      "file": "31-agent-xie-zuo-yue-ding-agents-md-gui-fan-yu-bian-ma-yue-ding.md",
+      "section": "深入解析",
+      "group": "系统集成与工程实践",
+      "level": "Beginner"
+    },
+    {
+      "slug": "32-fa-bu-yu-fen-fa-npm-bao-jie-gou-files-zi-duan-yu-pnpm-link-ben-di-diao-shi",
+      "title": "发布与分发：npm 包结构、files 字段与 pnpm link 本地调试",
+      "file": "32-fa-bu-yu-fen-fa-npm-bao-jie-gou-files-zi-duan-yu-pnpm-link-ben-di-diao-shi.md",
+      "section": "深入解析",
+      "group": "系统集成与工程实践",
+      "level": "Intermediate"
+    }
+  ]
+}

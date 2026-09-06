@@ -70,7 +70,7 @@ src/
 
 ## 多 Provider 设计
 
-`CliProvider` 类型为 `'claude-code' | 'qoder' | 'codex'`。每个 provider 在 `providers.ts` 中注册，包含 CLI 命令、新建/恢复 session 参数和 home 目录。`SessionReader` 接受 provider 参数以读取对应 `~/.<provider>/` 目录下的数据。CLI 全局 `--provider` 参数用于跨命令过滤。
+`CliProvider` 类型为 `'claude-code' | 'qoder' | 'codex' | 'kimi' | 'pi' | 'opencode' | 'workbuddy' | 'traecode'`。每个 provider 在 `providers.ts` 中注册，包含 CLI 命令、新建/恢复 session 参数和 home 目录。`SessionReader` 接受 provider 参数以读取对应 `~/.<provider>/` 目录下的数据。CLI 全局 `--provider` 参数用于跨命令过滤。
 
 ## 约定
 
