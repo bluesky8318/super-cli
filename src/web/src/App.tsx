@@ -39,12 +39,22 @@ const PROVIDER_COLORS: Record<CliProvider, string> = {
   'claude-code': '#d97706',
   'qoder': '#7c3aed',
   'codex': '#059669',
+  'kimi': '#f43f5e',
+  'pi': '#ec4899',
+  'opencode': '#0ea5e9',
+  'workbuddy': '#14b8a6',
+  'traecode': '#3b82f6',
 };
 
 const PROVIDER_LABELS: Record<CliProvider, string> = {
   'claude-code': 'CC',
   'qoder': 'QD',
   'codex': 'CX',
+  'kimi': 'KM',
+  'pi': 'PI',
+  'opencode': 'OC',
+  'workbuddy': 'WB',
+  'traecode': 'TC',
 };
 
 interface ProviderInfo {

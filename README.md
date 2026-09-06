@@ -1,6 +1,6 @@
 # super-cli
 
-AI 编程助手 session 管理工具。统一管理 Claude Code、Qoder、Codex 的历史对话，支持命令行和 Web 看板两种交互方式。
+AI 编程助手 session 管理工具。统一管理 Claude Code、Qoder、Codex、Kimi CLI、Pi、OpenCode、WorkBuddy 和 TraeCode 的历史对话，支持命令行和 Web 看板两种交互方式。
 
 ## 功能
 

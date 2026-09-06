@@ -1,4 +1,4 @@
-export type CliProvider = 'claude-code' | 'qoder' | 'codex';
+export type CliProvider = 'claude-code' | 'qoder' | 'codex' | 'kimi' | 'pi' | 'opencode' | 'workbuddy' | 'traecode';
 export type SessionStatus = 'backlog' | 'in_progress' | 'review' | 'done' | 'cancelled';
 export type TerminalType = 'ghostty' | 'iterm2' | 'terminal' | 'kitty' | 'warp';
 

@@ -4,7 +4,7 @@
 
 ## 项目概述
 
-`super-cli` 是一个 AI 编程助手 session 管理工具，支持 Claude Code、Qoder、Codex 三个 provider，提供：
+`super-cli` 是一个 AI 编程助手 session 管理工具，支持 Claude Code、Qoder、Codex、Kimi CLI、Pi、OpenCode、WorkBuddy、TraeCode 多个 provider，提供：
 
 1. **Session 索引与搜索** — 快速列出、查看、搜索所有历史 session
 2. **任务命名与标签** — 给 session 命名/打标签，视为 task 管理（带状态看板）

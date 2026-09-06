@@ -37,6 +37,46 @@ const PROVIDER_CONFIGS: ProviderConfig[] = [
     resumeArgs: (id) => ['resume', id],
     homeDir: join(homedir(), '.codex'),
   },
+  {
+    id: 'kimi',
+    name: 'Kimi CLI',
+    command: 'kimi',
+    newArgs: [],
+    resumeArgs: (id) => ['--resume', id],
+    homeDir: join(homedir(), '.kimi'),
+  },
+  {
+    id: 'pi',
+    name: 'Pi CLI',
+    command: 'pi',
+    newArgs: [],
+    resumeArgs: (id) => ['--resume', id],
+    homeDir: join(homedir(), '.pi'),
+  },
+  {
+    id: 'opencode',
+    name: 'OpenCode',
+    command: 'opencode',
+    newArgs: [],
+    resumeArgs: (id) => ['--resume', id],
+    homeDir: join(homedir(), '.opencode'),
+  },
+  {
+    id: 'workbuddy',
+    name: 'WorkBuddy',
+    command: 'workbuddy',
+    newArgs: [],
+    resumeArgs: (id) => ['--resume', id],
+    homeDir: join(homedir(), '.workbuddy'),
+  },
+  {
+    id: 'traecode',
+    name: 'TraeCode',
+    command: 'traecode',
+    newArgs: [],
+    resumeArgs: (id) => ['--resume', id],
+    homeDir: join(homedir(), '.traecode'),
+  },
 ];
 
 export function getAllProviders(): ProviderConfig[] {
