@@ -1237,9 +1237,8 @@ body {
 }
 
 .board-column {
+  flex: 1;
   min-width: 240px;
-  width: 240px;
-  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg-secondary);
