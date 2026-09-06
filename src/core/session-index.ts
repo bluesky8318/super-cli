@@ -14,6 +14,7 @@ export interface ISessionReader {
   readSession(projectEncoded: string, sessionId: string): Promise<SessionMessage[]>;
   readSessionMetadata(projectEncoded: string, sessionId: string): Promise<SessionMetadata>;
   readActiveSessions(): Promise<ActiveSession[]>;
+  getSessionFileStats(projectEncoded: string, sessionId: string): Promise<{ size: number; mtime: Date } | null>;
 }
 
 import type { SessionMessage } from './types.js';
@@ -42,6 +43,7 @@ export class SessionIndex {
   private readers: (SessionReader | CodexReader)[];
   private taskStore: TaskStore;
   private cache: Map<string, SessionMetadata> = new Map();
+  private fileMetaCache = new Map<string, { mtimeMs: number; metadata: SessionMetadata }>();
   private built = false;
   private lastBuildTime = 0;
   private readonly ttlMs: number;
@@ -72,7 +74,7 @@ export class SessionIndex {
     const now = Date.now();
     if (this.built && !options?.forceRefresh && (now - this.lastBuildTime) < this.ttlMs) return;
 
-    this.cache.clear();
+    const newCache = new Map<string, SessionMetadata>();
     const labels = await this.taskStore.getAll();
 
     for (const reader of this.readers) {
@@ -81,13 +83,24 @@ export class SessionIndex {
         const sessionIds = await reader.listProjectSessions(project.encoded);
         for (const sessionId of sessionIds) {
           try {
-            const metadata = await reader.readSessionMetadata(project.encoded, sessionId);
+            let metadata: SessionMetadata;
+            const stats = await reader.getSessionFileStats(project.encoded, sessionId);
+            const mtimeMs = stats ? stats.mtime.getTime() : 0;
+            
+            const cached = this.fileMetaCache.get(sessionId);
+            if (cached && cached.mtimeMs === mtimeMs && mtimeMs !== 0) {
+              metadata = { ...cached.metadata };
+            } else {
+              metadata = await reader.readSessionMetadata(project.encoded, sessionId);
+              this.fileMetaCache.set(sessionId, { mtimeMs, metadata: { ...metadata } });
+            }
+
             const taskLabel = labels[sessionId];
             if (taskLabel) {
               metadata.label = taskLabel.label;
               metadata.tags = taskLabel.tags;
             }
-            this.cache.set(sessionId, metadata);
+            newCache.set(sessionId, metadata);
           } catch {
             // skip unreadable sessions
           }
@@ -95,6 +108,7 @@ export class SessionIndex {
       }
     }
 
+    this.cache = newCache;
     this.built = true;
     this.lastBuildTime = Date.now();
   }
