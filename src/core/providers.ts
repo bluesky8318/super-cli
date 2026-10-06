@@ -10,6 +10,8 @@ export interface ProviderConfig {
   newArgs: string[];
   resumeArgs: (sessionId: string) => string[];
   homeDir: string;
+  /** Whether the CLI accepts an initial prompt as a positional argument on launch. */
+  supportsPrompt?: boolean;
 }
 
 const PROVIDER_CONFIGS: ProviderConfig[] = [
@@ -19,6 +21,7 @@ const PROVIDER_CONFIGS: ProviderConfig[] = [
     command: 'claude',
     newArgs: ['--dangerously-skip-permissions'],
     resumeArgs: (id) => ['--dangerously-skip-permissions', '--resume', id],
+    supportsPrompt: true,
     homeDir: join(homedir(), '.claude'),
   },
   {
@@ -35,6 +38,7 @@ const PROVIDER_CONFIGS: ProviderConfig[] = [
     command: 'codex',
     newArgs: [],
     resumeArgs: (id) => ['resume', id],
+    supportsPrompt: true,
     homeDir: join(homedir(), '.codex'),
   },
   {
@@ -43,6 +47,7 @@ const PROVIDER_CONFIGS: ProviderConfig[] = [
     command: 'kimi',
     newArgs: [],
     resumeArgs: (id) => ['--resume', id],
+    supportsPrompt: true,
     homeDir: join(homedir(), '.kimi'),
   },
   {

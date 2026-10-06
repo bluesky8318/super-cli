@@ -1,6 +1,6 @@
 import { readdir, readFile, rm, cp, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 import type { CliProvider, SkillInfo } from './types.js';
 import { getAvailableProviders, getProviderHome } from './providers.js';
 
@@ -24,8 +24,8 @@ function getGlobalSkillsDir(provider: CliProvider): string {
 }
 
 function getProjectSkillsDir(provider: CliProvider, projectPath: string): string {
-  const dirName = provider === 'claude-code' ? '.claude' : provider === 'qoder' ? '.qoder' : '.codex';
-  return join(projectPath, dirName, 'skills');
+  // Project-local skills dir mirrors the provider's home dir name (~/.<x> -> .<x>).
+  return join(projectPath, basename(getProviderHome(provider)), 'skills');
 }
 
 async function scanSkillsDir(dir: string, provider: CliProvider, scope: 'global' | 'project'): Promise<SkillInfo[]> {

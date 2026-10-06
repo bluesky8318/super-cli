@@ -21,12 +21,14 @@ export function registerSessionRoutes(app: FastifyInstance, index: SessionIndex)
         offset: query.offset ? parseInt(query.offset) : 0,
         sort: (query.sort as 'date-asc' | 'date-desc') ?? 'date-desc',
       }),
-      Promise.resolve([]),
+      index.getActiveSessions(),
     ]);
 
+    const activeIds = new Set(activeSessions.map(a => a.sessionId));
     const enriched = sessions.map(s => ({
       ...s,
       status: inferSessionStatus(s, activeSessions),
+      active: activeIds.has(s.sessionId),
     }));
 
     return { sessions: enriched, total: enriched.length };
@@ -109,12 +111,12 @@ export function registerSessionRoutes(app: FastifyInstance, index: SessionIndex)
   });
 
   app.post('/api/sessions/new', async (req, reply) => {
-    const { project, provider } = req.body as { project?: string; provider?: CliProvider };
+    const { project, provider, prompt } = req.body as { project?: string; provider?: CliProvider; prompt?: string };
     if (!project) {
       reply.code(400);
       return { error: 'project path is required' };
     }
-    const result = await launcher.launchNew(project, provider || 'claude-code');
+    const result = await launcher.launchNew(project, provider || 'claude-code', prompt);
     if (result.action === 'error') {
       reply.code(500);
     }

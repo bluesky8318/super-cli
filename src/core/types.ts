@@ -101,6 +101,62 @@ export interface TaskLabel {
   tags?: string[];
 }
 
+export type IssueStatus = 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'blocked' | 'done' | 'canceled';
+export type IssuePriority = 'none' | 'urgent' | 'high' | 'medium' | 'low';
+
+export interface Issue {
+  id: string;
+  identifier: string;
+  projectEncoded?: string;
+  title: string;
+  description: string;
+  status: IssueStatus;
+  priority: IssuePriority;
+  labels: string[];
+  sortOrder: number;
+  version: number;
+  sessionIds: string[];
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+}
+
+export type IssueRelationType = 'parent' | 'blocks' | 'related';
+
+export interface IssueRelation {
+  type: IssueRelationType;
+  sourceId: string;
+  targetId: string;
+}
+
+export interface IssueComment {
+  id: string;
+  issueId: string;
+  body: string;
+  authorType: 'user' | 'agent';
+  sessionId?: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IssueActivity {
+  id: string;
+  issueId: string;
+  at: string;
+  actorType: 'user' | 'agent' | 'cli';
+  changes: Record<string, { from: unknown; to: unknown }>;
+}
+
+export interface IssueBoardData {
+  version: 1;
+  nextIssueNumber: number;
+  issues: Record<string, Issue>;
+  relations: IssueRelation[];
+  comments: Record<string, IssueComment>;
+  activities: IssueActivity[];
+}
+
 export interface AppConfig {
   version: number;
   sessions: Record<string, TaskLabel>;

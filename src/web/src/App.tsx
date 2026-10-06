@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { fetchSessions, fetchProjects, fetchSessionMessages, fetchTasks, resumeSession, createNewSession, fetchProjectDetail, archiveProject, unarchiveProject, pinProject, unpinProject, fetchProviders, openProjectInFinder, openProjectInTerminal, refreshCache, fetchProjectFiles, fetchProjectFileContent } from './api/client.js';
+import { fetchSessions, fetchProjects, fetchSessionMessages, fetchTasks, resumeSession, createNewSession, fetchProjectDetail, archiveProject, unarchiveProject, pinProject, unpinProject, fetchProviders, openProjectInFinder, openProjectInTerminal, refreshCache, fetchProjectFiles, fetchProjectFileContent, fetchIssues, moveIssue, ApiError } from './api/client.js';
 import ConfigView from './ConfigView.js';
+import IssueCard from './components/IssueCard.js';
+import IssueDetail from './components/IssueDetail.js';
+import NewIssueModal from './components/NewIssueModal.js';
+import BoardColumnHeader from './components/BoardColumnHeader.js';
+import { PROVIDER_COLORS, PROVIDER_LABELS, ISSUE_COLUMNS, sessionStatusToColumn } from './constants.js';
+import type { CliProvider, Issue, IssueStatus, IssueSummary, ProviderInfo, SessionItem } from './types.js';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-typescript.js';
 import 'prismjs/components/prism-jsx.js';
@@ -24,66 +30,6 @@ import './index.css';
 type Theme = 'light' | 'dark' | 'deep';
 type ViewMode = 'board' | 'card' | 'list';
 type SortMode = 'time-desc' | 'time-asc' | 'messages';
-type SessionStatus = 'backlog' | 'in_progress' | 'review' | 'done' | 'cancelled';
-type CliProvider = 'claude-code' | 'qoder' | 'codex' | 'kimi' | 'pi' | 'opencode' | 'workbuddy' | 'traecode';
-
-const STATUS_COLUMNS: { key: SessionStatus; label: string; color: string }[] = [
-  { key: 'in_progress', label: '进行中', color: '#3b82f6' },
-  { key: 'review', label: '待复查', color: '#8b5cf6' },
-  { key: 'backlog', label: '待办', color: '#f59e0b' },
-  { key: 'done', label: '已完成', color: '#10b981' },
-  { key: 'cancelled', label: '已取消', color: '#6b7280' },
-];
-
-const PROVIDER_COLORS: Record<CliProvider, string> = {
-  'claude-code': '#d97706',
-  'qoder': '#7c3aed',
-  'codex': '#059669',
-  'kimi': '#f43f5e',
-  'pi': '#ec4899',
-  'opencode': '#0ea5e9',
-  'workbuddy': '#14b8a6',
-  'traecode': '#3b82f6',
-};
-
-const PROVIDER_LABELS: Record<CliProvider, string> = {
-  'claude-code': 'CC',
-  'qoder': 'QD',
-  'codex': 'CX',
-  'kimi': 'KM',
-  'pi': 'PI',
-  'opencode': 'OC',
-  'workbuddy': 'WB',
-  'traecode': 'TC',
-};
-
-interface ProviderInfo {
-  id: CliProvider;
-  name: string;
-  command: string;
-}
-
-interface SessionItem {
-  sessionId: string;
-  provider: CliProvider;
-  project: string;
-  projectEncoded: string;
-  firstTimestamp?: string;
-  lastTimestamp?: string;
-  userMessageCount: number;
-  assistantMessageCount: number;
-  models: string[];
-  gitBranch?: string;
-  firstUserMessage?: string;
-  lastAssistantMessage?: string;
-  label?: string;
-  tags?: string[];
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  version?: string;
-  cwd?: string;
-  status?: SessionStatus;
-}
 
 interface Message {
   type: string;
@@ -136,6 +82,14 @@ export default function App() {
   });
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [selectedSession, setSelectedSession] = useState<SessionItem | null>(null);
+  const [issues, setIssues] = useState<IssueSummary[]>([]);
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const [showNewIssue, setShowNewIssue] = useState(false);
+  const [newIssueInitialStatus, setNewIssueInitialStatus] = useState<IssueStatus | undefined>(undefined);
+  const [dropTarget, setDropTarget] = useState<IssueStatus | null>(null);
+  const [draggingIssueId, setDraggingIssueId] = useState<string | null>(null);
+  const [issueRefreshKey, setIssueRefreshKey] = useState(0);
+  const dragIssueRef = useRef<IssueSummary | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -214,6 +168,54 @@ export default function App() {
     loadSessions();
   }, [selectedProject, selectedProviders, sortMode]);
 
+  // Refetch issues for the current project filter (used by SSE events and conflict recovery).
+  function issueQueryParams(): Record<string, string> {
+    // selectedProject is the decoded path; the API filters on the encoded form.
+    return selectedProject ? { project: selectedProject.replace(/\//g, '-') } : {};
+  }
+
+  async function loadIssues() {
+    try {
+      const data = await fetchIssues(issueQueryParams());
+      setIssues(data.issues ?? []);
+    } catch (e) {
+      console.error('Failed to load issues', e);
+    }
+  }
+
+  const loadIssuesRef = useRef<() => Promise<void>>(async () => {});
+  useEffect(() => {
+    loadIssuesRef.current = loadIssues;
+  });
+
+  // SSE: debounce issue/comment events into a board + open-detail refresh.
+  useEffect(() => {
+    const es = new EventSource('/api/events');
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let openedOnce = false;
+    const scheduleRefresh = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        loadIssuesRef.current();
+        setIssueRefreshKey(k => k + 1);
+      }, 300);
+    };
+    const eventNames = [
+      'issue.created', 'issue.updated', 'issue.moved', 'issue.archived', 'issue.restored',
+      'issue.deleted', 'issue.relation.updated', 'comment.created', 'comment.updated', 'comment.deleted',
+    ];
+    eventNames.forEach(name => es.addEventListener(name, scheduleRefresh));
+    es.onopen = () => {
+      // Auto-reconnect: do a full refresh on every reconnect after the first open.
+      if (openedOnce) scheduleRefresh();
+      openedOnce = true;
+    };
+    return () => {
+      if (timer) clearTimeout(timer);
+      es.close();
+    };
+  }, []);
+
   async function loadData() {
     const providerParam = selectedProviders.length === 1 ? { provider: selectedProviders[0] } : undefined;
     const [projData, providerData] = await Promise.all([
@@ -230,8 +232,9 @@ export default function App() {
     const params: Record<string, string> = { limit: '200' };
     if (selectedProject) params.project = selectedProject;
     if (selectedProviders.length === 1) params.provider = selectedProviders[0];
-    const [data, taskData] = await Promise.all([fetchSessions(params), fetchTasks()]);
-    const taskMap = new Map((taskData.tasks ?? []).map((t: any) => [t.sessionId, t]));
+    const [data, taskData, issueData] = await Promise.all([fetchSessions(params), fetchTasks(), fetchIssues(issueQueryParams())]);
+    const taskMap = new Map<string, { label?: string; tags?: string[] }>((taskData.tasks ?? []).map((t: any) => [t.sessionId, t]));
+    setIssues(issueData.issues ?? []);
 
     let enriched: SessionItem[] = (data.sessions ?? []).map((s: any) => {
       const task = taskMap.get(s.sessionId);
@@ -269,11 +272,47 @@ export default function App() {
   }
 
   async function selectSession(session: SessionItem) {
+    setSelectedIssueId(null);
     setSelectedSession(session);
     setDetailLoading(true);
     const data = await fetchSessionMessages(session.sessionId, { limit: '200' });
     setMessages(data.messages ?? []);
     setDetailLoading(false);
+  }
+
+  function selectIssue(issue: IssueSummary) {
+    setSelectedSession(null);
+    setMessages([]);
+    setSelectedIssueId(issue.id);
+  }
+
+  // Sync an updated issue back into the board list (from IssueDetail mutations).
+  function handleIssueChanged(issue: Issue) {
+    setIssues(prev => {
+      const exists = prev.some(i => i.id === issue.id);
+      return exists
+        ? prev.map(i => (i.id === issue.id ? { ...i, ...issue } : i))
+        : [...prev, { ...issue, commentCount: 0 }];
+    });
+  }
+
+  async function handleDropIssue(status: IssueStatus) {
+    const issue = dragIssueRef.current;
+    dragIssueRef.current = null;
+    setDraggingIssueId(null);
+    setDropTarget(null);
+    if (!issue || issue.status === status) return;
+    try {
+      const data = await moveIssue(issue.id, { status, version: issue.version });
+      setIssues(prev => prev.map(i => (i.id === issue.id ? { ...i, ...data.issue } : i)));
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        alert('数据已被修改，正在刷新');
+        await loadIssues();
+      } else {
+        alert(e instanceof Error ? e.message : '移动失败');
+      }
+    }
   }
 
   function closeDetail() {
@@ -378,6 +417,7 @@ export default function App() {
       ]);
       setSessions(sessData.sessions ?? []);
       setProjects(projData.projects ?? []);
+      await loadIssues();
     } finally {
       setRefreshing(false);
     }
@@ -427,6 +467,9 @@ export default function App() {
     e.stopPropagation();
     setContextMenu({ encoded: p.encoded, decoded: p.decoded, pinned: !!p.pinned, archived: !!p.archived, x: e.clientX, y: e.clientY });
   }
+
+  // Sessions bound to any issue are rendered as badges on the issue card, not as standalone cards.
+  const boundSessionIds = useMemo(() => new Set(issues.flatMap(i => i.sessionIds)), [issues]);
 
   const filteredSessions = searchQuery
     ? sessions.filter(s =>
@@ -646,6 +689,10 @@ export default function App() {
                 )}
               </div>
             )}
+            <button className="new-issue-btn" onClick={() => { setNewIssueInitialStatus(undefined); setShowNewIssue(true); }} title="新建 Issue">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              新建 Issue
+            </button>
           </div>
           <div className="toolbar-right">
             <button className={`refresh-btn ${refreshing ? 'spinning' : ''}`} onClick={handleRefresh} disabled={refreshing} title="刷新数据">
@@ -687,18 +734,50 @@ export default function App() {
           <div className="loading">加载中...</div>
         ) : viewMode === 'board' ? (
           <div className="board">
-            {STATUS_COLUMNS.map(col => {
-              const colSessions = filteredSessions.filter(s => s.status === col.key);
+            {ISSUE_COLUMNS.map(col => {
+              const colIssues = issues
+                .filter(i => i.status === col.key)
+                .sort((a, b) => a.sortOrder - b.sortOrder);
+              const colSessions = filteredSessions.filter(s =>
+                !boundSessionIds.has(s.sessionId) && sessionStatusToColumn(s.status ?? 'backlog') === col.key
+              );
               const dateGroupActive = groupByDate && (sortMode === 'time-desc' || sortMode === 'time-asc');
               const dateGroups = dateGroupActive ? groupSessionsByDate(colSessions) : null;
               return (
-                <div key={col.key} className="board-column">
-                  <div className="column-header">
-                    <span className="column-dot" style={{ backgroundColor: col.color }}></span>
-                    <span className="column-title">{col.label}</span>
-                    <span className="column-count">{colSessions.length}</span>
-                  </div>
+                <div
+                  key={col.key}
+                  className={`board-column ${dropTarget === col.key ? 'drag-over' : ''}`}
+                  onDragOver={(e) => {
+                    if (!dragIssueRef.current) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (dropTarget !== col.key) setDropTarget(col.key);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    handleDropIssue(col.key);
+                  }}
+                >
+                  <BoardColumnHeader
+                    status={col.key}
+                    label={col.label}
+                    color={col.color}
+                    count={colIssues.length + colSessions.length}
+                    onAdd={() => { setNewIssueInitialStatus(col.key); setShowNewIssue(true); }}
+                  />
                   <div className="column-cards">
+                    {colIssues.map(issue => (
+                      <IssueCard
+                        key={issue.id}
+                        issue={issue}
+                        sessions={sessions}
+                        isSelected={selectedIssueId === issue.id}
+                        isDragging={draggingIssueId === issue.id}
+                        onClick={() => selectIssue(issue)}
+                        onDragStart={() => { dragIssueRef.current = issue; setDraggingIssueId(issue.id); }}
+                        onDragEnd={() => { dragIssueRef.current = null; setDraggingIssueId(null); setDropTarget(null); }}
+                      />
+                    ))}
                     {dateGroups ? dateGroups.map(group => (
                       <DateGroupSection key={group.label} label={group.label} count={group.sessions.length}>
                         {group.sessions.map(s => (
@@ -754,10 +833,11 @@ export default function App() {
         )}
       </main>
 
-      {/* 右侧详情面板 */}
+      {/* 右侧详情面板（session 与 issue 互斥，共用可拖拽宽度） */}
+      {(selectedSession || selectedIssueId) && (
+        <div className="resize-handle" onMouseDown={handleResizeStart}></div>
+      )}
       {selectedSession && (
-        <>
-          <div className="resize-handle" onMouseDown={handleResizeStart}></div>
           <aside className="detail-panel" style={{ width: detailWidth }}>
             <div className="detail-header">
               <div className="detail-title-area">
@@ -795,7 +875,21 @@ export default function App() {
               )}
             </div>
           </aside>
-        </>
+      )}
+
+      {selectedIssueId && !selectedSession && (
+        <aside className="detail-panel" style={{ width: detailWidth }}>
+          <IssueDetail
+            issueId={selectedIssueId}
+            issues={issues}
+            sessions={sessions}
+            providers={providers}
+            refreshKey={issueRefreshKey}
+            onClose={() => setSelectedIssueId(null)}
+            onSelectSession={selectSession}
+            onChanged={handleIssueChanged}
+          />
+        </aside>
       )}
 
       {/* Tooltip */}
@@ -808,6 +902,19 @@ export default function App() {
         </div>
       )}
       </>
+      )}
+
+      {/* New Issue Modal */}
+      {showNewIssue && (
+        <NewIssueModal
+          projectEncoded={selectedProject ? selectedProject.replace(/\//g, '-') : undefined}
+          initialStatus={newIssueInitialStatus}
+          onClose={() => setShowNewIssue(false)}
+          onCreated={(issue) => {
+            setShowNewIssue(false);
+            setIssues(prev => [...prev, { ...issue, commentCount: 0 }]);
+          }}
+        />
       )}
 
       {/* Project Detail Overlay */}

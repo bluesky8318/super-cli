@@ -14,4 +14,5 @@ export default defineConfig({
   dts: false,
   outDir: 'dist',
   external: ['react', 'react-dom'],
+  loader: { '.md': 'text' },
 });

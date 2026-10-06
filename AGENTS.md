@@ -8,10 +8,11 @@
 
 1. **Session 索引与搜索** — 快速列出、查看、搜索所有历史 session
 2. **任务命名与标签** — 给 session 命名/打标签，视为 task 管理（带状态看板）
-3. **CLI 模式** — Agent-friendly 命令行交互，支持 `--json` 结构化输出
-4. **Web 模式** — 启动 HTTP 服务，在浏览器中查看 Dashboard、会话详情、搜索等
+3. **Issue 看板** — 独立的 issue 实体（7 状态、优先级、标签、评论、父子/依赖关系、乐观锁、SSE 实时推送），可绑定多个不同 provider 的 session；agent 工作流见 `docs/issue-workflow.md`
+4. **CLI 模式** — Agent-friendly 命令行交互，支持 `--json` 结构化输出
+5. **Web 模式** — 启动 HTTP 服务，在浏览器中查看 Dashboard、会话详情、搜索等
 
-直接读取 `~/.claude/`、`~/.qoder/`、`~/.codex/` 下的 JSONL 文件，无数据库，无外部 API 调用。仅在 `~/.super-cli/config.json` 存储用户标签/命名配置。
+直接读取 `~/.claude/`、`~/.qoder/`、`~/.codex/` 下的 JSONL 文件，无数据库，无外部 API 调用。仅在 `~/.super-cli/config.json` 存储用户标签/命名配置，在 `~/.super-cli/issues.json` 存储 issue 看板数据。
 
 ## 开发环境
 
@@ -44,19 +45,24 @@ pnpm start              # 运行构建产物：node dist/cli/index.js
 
 ```
 src/
-├── cli/          # Commander.js CLI 入口 + 子命令（list/show/search/name/tasks/stats/serve/config）
+├── cli/          # Commander.js CLI 入口 + 子命令（list/show/search/name/tasks/issue/skill/stats/serve/config）
 ├── core/         # 共享数据层 — 纯读取逻辑，不依赖 HTTP 或 CLI 框架
 │   ├── session-reader.ts   # 流式读取 JSONL 文件，从原始消息中提取元数据
 │   ├── session-index.ts    # 跨项目的全量 session 内存索引
 │   ├── task-store.ts       # 读写 ~/.super-cli/config.json（标签/命名持久化）
+│   ├── issue-store.ts      # 读写 ~/.super-cli/issues.json（issue/评论/关系/活动日志，乐观锁）
+│   ├── issue-skill.ts      # 加载 skills/super-cli-taskboard/SKILL.md（构建时内联）
+│   ├── skill-installer.ts  # skill 安装/卸载/状态检测（global: ~/ 下各 provider 目录的 skills/，project: 项目内 .<provider>/skills）
 │   ├── providers.ts        # Provider 注册表（claude-code, qoder, codex），含命令和恢复参数
 │   ├── paths.ts            # 路径工具：项目路径编码、session 文件路径、各 CLI home 目录
 │   ├── terminal-launcher.ts # macOS 终端集成（ghostty, iTerm2, Terminal.app, kitty, Warp）
 │   └── types.ts            # 全部共享 TypeScript 类型
 ├── server/       # Fastify 5 HTTP 服务器 — /api/* REST 接口，同时托管 dist/web/ 静态资源
-│   └── routes/   # sessions.ts, tasks.ts, stats.ts, projects.ts, config.ts
+│   ├── events.ts # EventHub：SSE 广播（GET /api/events），issue 变更实时推送
+│   └── routes/   # sessions.ts, tasks.ts, issues.ts, stats.ts, projects.ts, config.ts
 └── web/          # React 19 SPA — 独立 vite.config.ts，不在根 tsconfig.json 中
-    └── src/      # App.tsx（单文件 SPA）、ConfigView.tsx、api/client.ts、index.css（Tailwind 4）
+    └── src/      # App.tsx（单文件 SPA）、ConfigView.tsx、components/（IssueCard/IssueDetail/NewIssueModal）、api/client.ts、index.css（Tailwind 4）
+skills/           # 随包分发的 agent skill（super-cli-taskboard/SKILL.md），`skill install` 安装到各 provider 的 skills 目录
 ```
 
 ## 架构要点
@@ -78,7 +84,7 @@ src/
 - TypeScript strict 模式；`tsc --noEmit` 不包含 `src/web/`（前端有独立的 vite 构建流程）
 - Commit message 用英文，祈使句风格
 - 代码注释用英文；面向用户的字符串可以用中文
-- 无独立数据库，只读 `~/.claude/` JSONL，只写 `~/.super-cli/config.json`
+- 无独立数据库，只读 `~/.claude/` JSONL，只写 `~/.super-cli/config.json`（标签/命名）和 `~/.super-cli/issues.json`（issue 看板）
 - tsconfig 中定义了 `@core/*`、`@cli/*`、`@server/*` 路径别名，由 tsup 在构建时解析
 
 ## CLI 命令参考
@@ -89,6 +95,19 @@ super-cli show <id> [--summary|--messages|--tools] [--json]
 super-cli search <query> [--project] [--since] [--max] [--json]
 super-cli name <id> [label] [--remove] [--tag] [--untag]
 super-cli tasks [--tag] [--json]
+super-cli issue list [--project] [--status] [--archived] [--json]
+super-cli issue show <id> [--comments] [--activity] [--json]
+super-cli issue create --title <t> [--project] [--priority] [--label] [--desc] [--json]
+super-cli issue update <id> [--title] [--desc] [--priority] [--label] [--if-version N]
+super-cli issue move <id> <status> [--if-version N] [--json]
+super-cli issue claim <id> [--session-id <s>] [--json]
+super-cli issue archive|restore|delete <id> [--if-version N]
+super-cli issue bind|unbind <id> <sessionId> [--if-version N]
+super-cli issue comment <id> [--add <body>] [--agent] [--session-id] [--after] [--json]
+super-cli issue relate|unrelate <id> <parent|blocks|related> <targetId>
+super-cli skill list [--json]
+super-cli skill install|uninstall [--agent a,b] [--global|--project] [-y] [--json]
+super-cli skill path [--json]
 super-cli stats [--daily] [--model] [--json]
 super-cli serve [--port] [--host] [--open]
 super-cli config [show|set|get|path]

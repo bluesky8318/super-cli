@@ -6,8 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { SessionIndex } from '../core/session-index.js';
 import { TaskStore } from '../core/task-store.js';
+import { IssueStore } from '../core/issue-store.js';
+import { EventHub } from './events.js';
 import { registerSessionRoutes } from './routes/sessions.js';
 import { registerTaskRoutes } from './routes/tasks.js';
+import { registerIssueRoutes } from './routes/issues.js';
 import { registerStatsRoutes } from './routes/stats.js';
 import { registerProjectRoutes } from './routes/projects.js';
 import { registerConfigRoutes } from './routes/config.js';
@@ -22,9 +25,12 @@ export async function startServer(options: { port: number; host: string }): Prom
 
   const index = new SessionIndex();
   const taskStore = new TaskStore();
+  const issueStore = new IssueStore();
+  const eventHub = new EventHub();
 
   registerSessionRoutes(app, index);
   registerTaskRoutes(app, index, taskStore);
+  registerIssueRoutes(app, issueStore, eventHub);
   registerStatsRoutes(app, index);
   registerProjectRoutes(app, index);
   registerConfigRoutes(app);

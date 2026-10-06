@@ -33,7 +33,7 @@ export class TerminalLauncher {
     }
   }
 
-  async launchNew(cwd: string, provider: CliProvider = 'claude-code'): Promise<LaunchResult> {
+  async launchNew(cwd: string, provider: CliProvider = 'claude-code', prompt?: string): Promise<LaunchResult> {
     const terminal = await this.getTerminal();
 
     if (!existsSync(cwd)) {
@@ -41,9 +41,11 @@ export class TerminalLauncher {
     }
 
     const providerConfig = getProvider(provider);
-    const cmd = providerConfig.newArgs.length
-      ? `${providerConfig.command} ${providerConfig.newArgs.join(' ')}`
-      : providerConfig.command;
+    const parts = [providerConfig.command, ...providerConfig.newArgs];
+    if (prompt && providerConfig.supportsPrompt) {
+      parts.push(this.shellEscape(prompt));
+    }
+    const cmd = parts.join(' ');
 
     try {
       await this.launchInTerminal(terminal, cmd, cwd);

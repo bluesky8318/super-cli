@@ -1,4 +1,4 @@
-import type { CliProvider, SessionMetadata, ListOptions, ProjectInfo, ActiveSession, SessionStatus } from './types.js';
+import type { CliProvider, SessionMetadata, ListOptions, ProjectInfo, ActiveSession, SessionStatus, IssueStatus } from './types.js';
 import { SessionReader } from './session-reader.js';
 import { CodexReader } from './codex-reader.js';
 import { TaskStore } from './task-store.js';
@@ -37,6 +37,18 @@ export function inferSessionStatus(
   if (hoursSince <= 4) return 'in_progress';
   if (hoursSince <= 72) return 'backlog';
   return meta.messageCount >= 5 ? 'done' : 'backlog';
+}
+
+// Maps a derived SessionStatus onto the 7-column issue board. Issue statuses
+// themselves are explicit fields and never go through this mapping.
+export function sessionStatusToColumn(status: SessionStatus): IssueStatus {
+  switch (status) {
+    case 'backlog': return 'todo';
+    case 'in_progress': return 'in_progress';
+    case 'review': return 'in_review';
+    case 'done': return 'done';
+    case 'cancelled': return 'canceled';
+  }
 }
 
 export class SessionIndex {
@@ -111,6 +123,14 @@ export class SessionIndex {
     this.cache = newCache;
     this.built = true;
     this.lastBuildTime = Date.now();
+  }
+
+  // Aggregate currently-running sessions across all provider readers.
+  async getActiveSessions(): Promise<ActiveSession[]> {
+    const results = await Promise.all(
+      this.readers.map(r => r.readActiveSessions().catch(() => [] as ActiveSession[])),
+    );
+    return results.flat();
   }
 
   async getAllSessions(options?: ListOptions): Promise<SessionMetadata[]> {

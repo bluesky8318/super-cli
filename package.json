@@ -11,6 +11,8 @@
     "dist/server",
     "dist/web",
     "dist/chunk-*.js",
+    "skills",
+    "docs",
     "LICENSE",
     "README.md",
     "CHANGELOG.md"

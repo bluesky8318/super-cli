@@ -70,11 +70,11 @@ export async function resumeSession(id: string) {
   return res.json();
 }
 
-export async function createNewSession(project: string, provider?: string) {
+export async function createNewSession(project: string, provider?: string, prompt?: string) {
   const res = await fetch(`${API_BASE}/sessions/new`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ project, provider }),
+    body: JSON.stringify({ project, provider, prompt }),
   });
   return res.json();
 }
@@ -242,4 +242,154 @@ export async function fetchProjectFileContent(encoded: string, path: string) {
   url.searchParams.set('path', path);
   const res = await fetch(url.toString());
   return res.json();
+}
+
+// ====== Issues ======
+
+// Error carrying the HTTP status and server error code (e.g. VERSION_CONFLICT on 409).
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  constructor(status: number, code: string | undefined, message: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+async function jsonOrThrow(res: Response) {
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new ApiError(res.status, data?.error?.code, data?.error?.message ?? `HTTP ${res.status}`);
+  }
+  return data;
+}
+
+export async function fetchIssues(params?: Record<string, string>) {
+  const url = new URL(`${API_BASE}/issues`, window.location.origin);
+  if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  return jsonOrThrow(await fetch(url.toString()));
+}
+
+export async function createIssue(data: {
+  title: string;
+  projectEncoded?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  labels?: string[];
+}) {
+  return jsonOrThrow(await fetch(`${API_BASE}/issues`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }));
+}
+
+export async function fetchIssue(id: string) {
+  return jsonOrThrow(await fetch(`${API_BASE}/issues/${encodeURIComponent(id)}`));
+}
+
+export async function updateIssue(id: string, data: {
+  version: number;
+  title?: string;
+  description?: string;
+  priority?: string;
+  labels?: string[];
+  projectEncoded?: string;
+}) {
+  return jsonOrThrow(await fetch(`${API_BASE}/issues/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }));
+}
+
+export async function moveIssue(id: string, data: { status: string; sortOrder?: number; version: number }) {
+  return jsonOrThrow(await fetch(`${API_BASE}/issues/${encodeURIComponent(id)}/move`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }));
+}
+
+export async function archiveIssue(id: string, version: number) {
+  return jsonOrThrow(await fetch(`${API_BASE}/issues/${encodeURIComponent(id)}/archive`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ version }),
+  }));
+}
+
+export async function restoreIssue(id: string, version: number) {
+  return jsonOrThrow(await fetch(`${API_BASE}/issues/${encodeURIComponent(id)}/restore`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ version }),
+  }));
+}
+
+export async function deleteIssue(id: string, version: number) {
+  const url = new URL(`${API_BASE}/issues/${encodeURIComponent(id)}`, window.location.origin);
+  url.searchParams.set('version', String(version));
+  return jsonOrThrow(await fetch(url.toString(), { method: 'DELETE' }));
+}
+
+export async function addIssueRelation(id: string, type: string, targetId: string) {
+  return jsonOrThrow(await fetch(`${API_BASE}/issues/${encodeURIComponent(id)}/relations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type, targetId }),
+  }));
+}
+
+export async function deleteIssueRelation(id: string, type: string, targetId: string) {
+  return jsonOrThrow(await fetch(
+    `${API_BASE}/issues/${encodeURIComponent(id)}/relations/${encodeURIComponent(type)}/${encodeURIComponent(targetId)}`,
+    { method: 'DELETE' },
+  ));
+}
+
+export async function fetchIssueComments(id: string, after?: string) {
+  const url = new URL(`${API_BASE}/issues/${encodeURIComponent(id)}/comments`, window.location.origin);
+  if (after) url.searchParams.set('after', after);
+  return jsonOrThrow(await fetch(url.toString()));
+}
+
+export async function createIssueComment(id: string, data: { body: string; authorType?: string; sessionId?: string }) {
+  return jsonOrThrow(await fetch(`${API_BASE}/issues/${encodeURIComponent(id)}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }));
+}
+
+export async function updateComment(id: string, data: { body: string; version: number }) {
+  return jsonOrThrow(await fetch(`${API_BASE}/comments/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }));
+}
+
+export async function deleteComment(id: string) {
+  return jsonOrThrow(await fetch(`${API_BASE}/comments/${encodeURIComponent(id)}`, { method: 'DELETE' }));
+}
+
+export async function bindIssueSession(id: string, sessionId: string, version: number) {
+  return jsonOrThrow(await fetch(`${API_BASE}/issues/${encodeURIComponent(id)}/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ version }),
+  }));
+}
+
+export async function unbindIssueSession(id: string, sessionId: string, version: number) {
+  const url = new URL(`${API_BASE}/issues/${encodeURIComponent(id)}/sessions/${encodeURIComponent(sessionId)}`, window.location.origin);
+  url.searchParams.set('version', String(version));
+  return jsonOrThrow(await fetch(url.toString(), { method: 'DELETE' }));
+}
+
+export async function fetchIssueActivities(id: string) {
+  return jsonOrThrow(await fetch(`${API_BASE}/issues/${encodeURIComponent(id)}/activities`));
 }

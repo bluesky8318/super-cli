@@ -39,6 +39,10 @@ export function getSuperCliConfigPath(): string {
   return join(getSuperCliHome(), 'config.json');
 }
 
+export function getSuperCliIssuesPath(): string {
+  return join(getSuperCliHome(), 'issues.json');
+}
+
 export function decodeProjectPath(encoded: string): string {
   if (!encoded.startsWith('-')) return encoded;
   return encoded.replace(/-/g, '/').replace(/^\//, '/');

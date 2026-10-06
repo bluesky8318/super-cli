@@ -11,7 +11,10 @@ AI 编程助手 session 管理工具。统一管理 Claude Code、Qoder、Codex�
 
 **任务看板**
 - 给 session 命名/打标签，视为独立任务管理
-- 看板视图（待办 / 进行中 / 待复查 / 已完成 / 已取消）
+- Issue 看板（7 状态列：需求池 / 待办 / 进行中 / 待复查 / 阻塞 / 已完成 / 已取消），拖拽改状态
+- Issue 支持优先级、标签、Markdown 描述、评论、父子/阻塞/关联关系
+- Issue 可绑定多个不同 provider 的 session，卡片上直接看到执行会话
+- 乐观锁（version）保证多 agent 并发操作安全，SSE 实时推送变更
 - 卡片视图、列表视图，按时间或消息量排序
 - 按日期分组（今天 / 昨天 / 本周 / 更早）
 
@@ -85,6 +88,23 @@ super-cli name abc123 --remove
 super-cli tasks
 super-cli tasks --tag backend
 
+# Issue 看板（agent-friendly，写操作支持 --if-version 乐观锁）
+super-cli issue list --status todo --json
+super-cli issue create --title "实现登录页" --priority high --label 前端
+super-cli issue show ISSUE-3 --comments --activity
+super-cli issue move ISSUE-3 in_progress --if-version 2
+super-cli issue claim ISSUE-3 --session-id abc123   # agent 一步认领：todo→in_progress + 绑定会话
+super-cli issue comment ISSUE-3 --add "已完成，待验收" --agent --session-id abc123
+super-cli issue bind ISSUE-3 abc123   # 绑定执行会话
+super-cli issue relate ISSUE-3 blocks ISSUE-5
+
+# 把 super-cli-taskboard skill 安装到各 agent（模拟 `npx skills` 交互式选择，-y 跳过）
+super-cli skill list                    # 查看各 agent 的安装状态
+super-cli skill install                 # 交互式选择 agent
+super-cli skill install -y              # 全部检测到的 agent，免交互
+super-cli skill install --agent claude-code,kimi --project   # 装到当前项目
+super-cli skill uninstall -y
+
 # 使用统计
 super-cli stats --model --daily
 
@@ -154,6 +174,9 @@ pnpm start        # 运行构建产物
 | Qoder sessions | `~/.qoder/projects/<编码路径>/<uuid>.jsonl` |
 | Codex sessions | `~/.codex/sessions/` |
 | 用户标签/命名 | `~/.super-cli/config.json` |
+| Issue 看板数据 | `~/.super-cli/issues.json` |
+
+Agent 使用 issue 看板的工作流纪律见 [docs/issue-workflow.md](docs/issue-workflow.md)。
 
 ## License
 
