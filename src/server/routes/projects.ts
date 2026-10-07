@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import { createReadStream } from 'node:fs';
 import { readdir, stat, readFile } from 'node:fs/promises';
 import { resolve, join, extname } from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -7,6 +8,7 @@ import { SessionIndex } from '../../core/session-index.js';
 import { ProjectArchive } from '../../core/project-archive.js';
 import { getProjectDetail } from '../../core/project-info.js';
 import { getAvailableProviders } from '../../core/providers.js';
+import { ConfigManager } from '../../core/config.js';
 import { TerminalLauncher } from '../../core/terminal-launcher.js';
 
 const IGNORED_ENTRIES = new Set([
@@ -23,8 +25,40 @@ const BINARY_EXTENSIONS = new Set([
 const MAX_PREVIEW_SIZE = 100 * 1024;
 const SKIP_THRESHOLD = 5 * 1024 * 1024;
 
+/** Content-Types that browsers render inline for the "open in new tab" raw endpoint. */
+const RAW_CONTENT_TYPES: Record<string, string> = {
+  html: 'text/html; charset=utf-8',
+  htm: 'text/html; charset=utf-8',
+  svg: 'image/svg+xml',
+  pdf: 'application/pdf',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  ico: 'image/x-icon',
+  bmp: 'image/bmp',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  json: 'application/json; charset=utf-8',
+};
+
 export function registerProjectRoutes(app: FastifyInstance, index: SessionIndex): void {
   const archive = new ProjectArchive();
+
+  /** Find a project by any of its identities (decoded path or legacy provider encodings). */
+  async function findProject(encoded: string) {
+    const projects = await index.getProjects();
+    return projects.find(p => p.encoded === encoded || p.decoded === encoded || p.aliases.includes(encoded));
+  }
+
+  /** All ids that may reference this project in pinned/archived config lists. */
+  function allIdsOf(project: { encoded: string; decoded: string; aliases: string[] } | undefined, fallback: string): string[] {
+    if (!project) return [fallback];
+    return [...new Set([project.encoded, project.decoded, ...project.aliases])];
+  }
 
   app.get('/api/providers', async () => {
     const available = getAvailableProviders();
@@ -45,18 +79,21 @@ export function registerProjectRoutes(app: FastifyInstance, index: SessionIndex)
       archive.getArchivedIds(),
       archive.getPinnedIds(),
     ]);
-    const augmented = projects.map(p => ({
-      ...p,
-      archived: archivedIds.includes(p.encoded),
-      pinned: pinnedIds.includes(p.encoded),
-    }));
+    const augmented = projects.map(p => {
+      // Match legacy provider-specific dir names as well as the decoded-path identity.
+      const ids = [p.encoded, p.decoded, ...p.aliases];
+      return {
+        ...p,
+        archived: ids.some(id => archivedIds.includes(id)),
+        pinned: ids.some(id => pinnedIds.includes(id)),
+      };
+    });
     return { projects: augmented, total: augmented.length };
   });
 
   app.get('/api/projects/:encoded/detail', async (req, reply) => {
     const { encoded } = req.params as { encoded: string };
-    const projects = await index.getProjects();
-    const project = projects.find(p => p.encoded === encoded);
+    const project = await findProject(encoded);
     if (!project) {
       reply.code(404);
       return { error: 'Project not found' };
@@ -67,38 +104,53 @@ export function registerProjectRoutes(app: FastifyInstance, index: SessionIndex)
 
   app.post('/api/projects/:encoded/archive', async (req) => {
     const { encoded } = req.params as { encoded: string };
-    await archive.archive(encoded);
+    const project = await findProject(encoded);
+    // Clean legacy ids, then store the canonical decoded-path identity.
+    for (const id of allIdsOf(project, encoded)) await archive.unarchive(id);
+    await archive.archive(project?.decoded ?? encoded);
     return { success: true };
   });
 
   app.post('/api/projects/:encoded/unarchive', async (req) => {
     const { encoded } = req.params as { encoded: string };
-    await archive.unarchive(encoded);
+    const project = await findProject(encoded);
+    for (const id of allIdsOf(project, encoded)) await archive.unarchive(id);
     return { success: true };
   });
 
   app.post('/api/projects/:encoded/pin', async (req) => {
     const { encoded } = req.params as { encoded: string };
-    await archive.pin(encoded);
+    const project = await findProject(encoded);
+    for (const id of allIdsOf(project, encoded)) await archive.unpin(id);
+    await archive.pin(project?.decoded ?? encoded);
     return { success: true };
   });
 
   app.post('/api/projects/:encoded/unpin', async (req) => {
     const { encoded } = req.params as { encoded: string };
-    await archive.unpin(encoded);
+    const project = await findProject(encoded);
+    for (const id of allIdsOf(project, encoded)) await archive.unpin(id);
     return { success: true };
   });
 
   app.post('/api/projects/:encoded/open-finder', async (req, reply) => {
     const { encoded } = req.params as { encoded: string };
-    const projects = await index.getProjects();
-    const project = projects.find(p => p.encoded === encoded);
+    const project = await findProject(encoded);
     if (!project) {
       reply.code(404);
       return { error: 'Project not found' };
     }
     try {
-      execSync(`open ${JSON.stringify(project.decoded)}`);
+      const config = await new ConfigManager().load();
+      const app = (config.settings?.fileManager ?? '').trim();
+      const dir = JSON.stringify(project.decoded);
+      if (process.platform === 'darwin') {
+        execSync(app ? `open -a ${JSON.stringify(app)} ${dir}` : `open ${dir}`);
+      } else if (process.platform === 'win32') {
+        execSync(app ? `${app} ${dir}` : `explorer ${dir}`);
+      } else {
+        execSync(app ? `${app} ${dir}` : `xdg-open ${dir}`);
+      }
       return { success: true };
     } catch (err: any) {
       reply.code(500);
@@ -108,8 +160,7 @@ export function registerProjectRoutes(app: FastifyInstance, index: SessionIndex)
 
   app.post('/api/projects/:encoded/open-terminal', async (req, reply) => {
     const { encoded } = req.params as { encoded: string };
-    const projects = await index.getProjects();
-    const project = projects.find(p => p.encoded === encoded);
+    const project = await findProject(encoded);
     if (!project) {
       reply.code(404);
       return { error: 'Project not found' };
@@ -127,8 +178,7 @@ export function registerProjectRoutes(app: FastifyInstance, index: SessionIndex)
   app.get('/api/projects/:encoded/files', async (req, reply) => {
     const { encoded } = req.params as { encoded: string };
     const { path: relativePath = '' } = req.query as { path?: string };
-    const projects = await index.getProjects();
-    const project = projects.find(p => p.encoded === encoded);
+    const project = await findProject(encoded);
     if (!project) {
       reply.code(404);
       return { error: 'Project not found' };
@@ -178,8 +228,7 @@ export function registerProjectRoutes(app: FastifyInstance, index: SessionIndex)
       reply.code(400);
       return { error: 'path is required' };
     }
-    const projects = await index.getProjects();
-    const project = projects.find(p => p.encoded === encoded);
+    const project = await findProject(encoded);
     if (!project) {
       reply.code(404);
       return { error: 'Project not found' };
@@ -223,4 +272,52 @@ export function registerProjectRoutes(app: FastifyInstance, index: SessionIndex)
       return { error: 'File not found' };
     }
   });
+
+  // Raw file stream for "open in new browser tab": renders inline where the
+  // browser supports it (html/pdf/images/audio/video/json), text otherwise.
+  const rawFileHandler = async (req: any, reply: any) => {
+    const { encoded } = req.params as { encoded: string };
+    // Support both ?path= and path-style (/raw/<file.md>) URLs; the latter keeps
+    // the real filename in location.pathname so browser extensions (e.g. the
+    // docu.md Markdown Viewer) can detect .md files by their extension.
+    const relativePath = ((req.params as Record<string, string>)['*']
+      ?? (req.query as Record<string, string>).path
+      ?? '').replace(/^\/+/, '');
+    if (!relativePath) {
+      reply.code(400);
+      return { error: 'path is required' };
+    }
+    const project = await findProject(encoded);
+    if (!project) {
+      reply.code(404);
+      return { error: 'Project not found' };
+    }
+
+    const rootDir = project.decoded;
+    const fullPath = resolve(rootDir, relativePath);
+    if (!fullPath.startsWith(rootDir)) {
+      reply.code(403);
+      return { error: 'Forbidden' };
+    }
+
+    try {
+      const fileStat = await stat(fullPath);
+      if (fileStat.isDirectory()) {
+        reply.code(400);
+        return { error: 'Path is a directory' };
+      }
+      const ext = extname(fullPath).slice(1).toLowerCase();
+      const contentType = RAW_CONTENT_TYPES[ext]
+        ?? (BINARY_EXTENSIONS.has(ext) ? 'application/octet-stream' : 'text/plain; charset=utf-8');
+      reply.header('Content-Type', contentType);
+      reply.header('Content-Length', String(fileStat.size));
+      return reply.send(createReadStream(fullPath));
+    } catch {
+      reply.code(404);
+      return { error: 'File not found' };
+    }
+  };
+
+  app.get('/api/projects/:encoded/files/raw', rawFileHandler);
+  app.get('/api/projects/:encoded/files/raw/*', rawFileHandler);
 }

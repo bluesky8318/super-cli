@@ -3,6 +3,16 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { CliProvider } from './types.js';
 
+/** How a provider stores session transcripts on disk. */
+export interface SessionLayout {
+  /** Directory under homeDir that holds one subdirectory per project. */
+  projectsDir: string;
+  /** How project directory names encode the project path. */
+  encoding: 'dash' | 'dash-no-prefix' | 'double-dash' | 'md5';
+  /** How session files are named inside a project directory. */
+  file: 'uuid.jsonl' | 'context.jsonl-subdir' | 'timestamp_uuid.jsonl';
+}
+
 export interface ProviderConfig {
   id: CliProvider;
   name: string;
@@ -12,6 +22,8 @@ export interface ProviderConfig {
   homeDir: string;
   /** Whether the CLI accepts an initial prompt as a positional argument on launch. */
   supportsPrompt?: boolean;
+  /** Session storage layout; undefined means sessions cannot be indexed (yet). */
+  sessionLayout?: SessionLayout;
 }
 
 const PROVIDER_CONFIGS: ProviderConfig[] = [
@@ -23,6 +35,7 @@ const PROVIDER_CONFIGS: ProviderConfig[] = [
     resumeArgs: (id) => ['--dangerously-skip-permissions', '--resume', id],
     supportsPrompt: true,
     homeDir: join(homedir(), '.claude'),
+    sessionLayout: { projectsDir: 'projects', encoding: 'dash', file: 'uuid.jsonl' },
   },
   {
     id: 'qoder',
@@ -31,6 +44,7 @@ const PROVIDER_CONFIGS: ProviderConfig[] = [
     newArgs: ['--dangerously-skip-permissions'],
     resumeArgs: (id) => ['--dangerously-skip-permissions', '--resume', id],
     homeDir: join(homedir(), '.qoder'),
+    sessionLayout: { projectsDir: 'projects', encoding: 'dash', file: 'uuid.jsonl' },
   },
   {
     id: 'codex',
@@ -49,14 +63,17 @@ const PROVIDER_CONFIGS: ProviderConfig[] = [
     resumeArgs: (id) => ['--resume', id],
     supportsPrompt: true,
     homeDir: join(homedir(), '.kimi'),
+    sessionLayout: { projectsDir: 'sessions', encoding: 'md5', file: 'context.jsonl-subdir' },
   },
   {
     id: 'pi',
     name: 'Pi CLI',
     command: 'pi',
     newArgs: [],
-    resumeArgs: (id) => ['--resume', id],
+    // Pi file names are `<timestamp>_<uuid>.jsonl`; strip the timestamp prefix for resume.
+    resumeArgs: (id) => ['--resume', id.includes('_') ? id.slice(id.indexOf('_') + 1) : id],
     homeDir: join(homedir(), '.pi'),
+    sessionLayout: { projectsDir: 'agent/sessions', encoding: 'double-dash', file: 'timestamp_uuid.jsonl' },
   },
   {
     id: 'opencode',
@@ -73,6 +90,7 @@ const PROVIDER_CONFIGS: ProviderConfig[] = [
     newArgs: [],
     resumeArgs: (id) => ['--resume', id],
     homeDir: join(homedir(), '.workbuddy'),
+    sessionLayout: { projectsDir: 'projects', encoding: 'dash-no-prefix', file: 'uuid.jsonl' },
   },
   {
     id: 'traecode',

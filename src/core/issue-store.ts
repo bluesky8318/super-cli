@@ -10,7 +10,7 @@ import type {
   IssueRelationType,
   IssueStatus,
 } from './types.js';
-import { getSuperCliHome, getSuperCliIssuesPath } from './paths.js';
+import { getSuperCliHome, getSuperCliIssuesPath, decodeAnyProjectPath } from './paths.js';
 
 export class VersionConflictError extends Error {
   readonly code = 'VERSION_CONFLICT';
@@ -52,6 +52,12 @@ const MAX_ACTIVITIES = 5000;
 
 const ISSUE_STATUSES: IssueStatus[] = ['backlog', 'todo', 'in_progress', 'in_review', 'blocked', 'done', 'canceled'];
 const ISSUE_PRIORITIES: IssuePriority[] = ['none', 'urgent', 'high', 'medium', 'low'];
+
+/** Issue project identity is the decoded absolute path; legacy dash-encoded values are normalized for comparison. */
+function normalizeProjectIdentity(p?: string): string | undefined {
+  if (!p) return p;
+  return p.startsWith('/') ? p : decodeAnyProjectPath(p);
+}
 
 export interface IssueFilter {
   projectEncoded?: string;
@@ -129,7 +135,11 @@ export class IssueStore {
     const data = await this.load();
     let issues = Object.values(data.issues);
     if (!filter.includeArchived) issues = issues.filter(i => !i.archivedAt);
-    if (filter.projectEncoded !== undefined) issues = issues.filter(i => i.projectEncoded === filter.projectEncoded);
+    if (filter.projectEncoded !== undefined) {
+      // Tolerate legacy dash-encoded identities: compare after normalization.
+      const target = normalizeProjectIdentity(filter.projectEncoded);
+      issues = issues.filter(i => normalizeProjectIdentity(i.projectEncoded) === target);
+    }
     if (filter.status) issues = issues.filter(i => i.status === filter.status);
     return issues.sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt));
   }
@@ -298,6 +308,14 @@ export class IssueStore {
     const issue = await this.getIssue(idOrIdentifier);
     this.assertVersion(issue, expectedVersion);
     if (issue.sessionIds.includes(sessionId)) return issue;
+    // A session belongs to at most one issue: detach it from any other issue first.
+    for (const other of Object.values(data.issues)) {
+      if (other.id !== issue.id && other.sessionIds.includes(sessionId)) {
+        const from = [...other.sessionIds];
+        other.sessionIds = other.sessionIds.filter(s => s !== sessionId);
+        this.touch(data, other, actorType, { sessionIds: { from, to: [...other.sessionIds] } });
+      }
+    }
     const changes = { sessionIds: { from: [...issue.sessionIds], to: [...issue.sessionIds, sessionId] } };
     issue.sessionIds.push(sessionId);
     this.touch(data, issue, actorType, changes);
@@ -313,6 +331,24 @@ export class IssueStore {
     const changes = { sessionIds: { from: [...issue.sessionIds], to: issue.sessionIds.filter(s => s !== sessionId) } };
     issue.sessionIds = issue.sessionIds.filter(s => s !== sessionId);
     this.touch(data, issue, actorType, changes);
+    await this.save();
+    return issue;
+  }
+
+  /** Record a finished/started headless run on the issue (no version gate; internal use). */
+  async recordRun(idOrIdentifier: string, run: { sessionId?: string }): Promise<Issue> {
+    const data = await this.load();
+    const issue = await this.getIssue(idOrIdentifier);
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    issue.lastRunAt = new Date().toISOString();
+    issue.runCount = (issue.runCount ?? 0) + 1;
+    changes.lastRunAt = { from: null, to: issue.lastRunAt };
+    changes.runCount = { from: (issue.runCount) - 1, to: issue.runCount };
+    if (run.sessionId && !issue.sessionIds.includes(run.sessionId)) {
+      changes.sessionIds = { from: [...issue.sessionIds], to: [...issue.sessionIds, run.sessionId] };
+      issue.sessionIds.push(run.sessionId);
+    }
+    this.touch(data, issue, 'agent', changes);
     await this.save();
     return issue;
   }

@@ -7,21 +7,27 @@ import {
   createIssueComment,
   createNewSession,
   deleteIssueRelation,
+  fetchAgents,
   fetchIssue,
   fetchIssueActivities,
   fetchIssueComments,
+  fetchIssueRuns,
   moveIssue,
+  startIssueRun,
+  stopIssueRun,
   unbindIssueSession,
   updateIssue,
 } from '../api/client.js';
 import { ISSUE_COLUMNS, ISSUE_PRIORITY_META, PROVIDER_COLORS, PROVIDER_LABELS } from '../constants.js';
 import type {
+  AgentProfile,
   Issue,
   IssueActivity,
   IssueComment,
   IssuePriority,
   IssueRelation,
   IssueRelationType,
+  IssueRun,
   IssueStatus,
   IssueSummary,
   ProviderInfo,
@@ -93,6 +99,11 @@ export default function IssueDetail({ issueId, issues, sessions, providers, refr
   const [bindTarget, setBindTarget] = useState('');
   const [launchProvider, setLaunchProvider] = useState('');
   const [launching, setLaunching] = useState(false);
+  const [agents, setAgents] = useState<AgentProfile[]>([]);
+  const [runs, setRuns] = useState<IssueRun[]>([]);
+  const [runActive, setRunActive] = useState(false);
+  const [runAgentId, setRunAgentId] = useState('');
+  const [runBusy, setRunBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -115,6 +126,49 @@ export default function IssueDetail({ issueId, issues, sessions, providers, refr
       setLoading(false);
     }
   }, [issueId]);
+
+  useEffect(() => {
+    fetchAgents().then(d => setAgents(d.agents ?? [])).catch(() => {});
+  }, []);
+
+  const loadRuns = useCallback(async () => {
+    try {
+      const d = await fetchIssueRuns(issueId);
+      setRuns(d.runs ?? []);
+      setRunActive(!!d.active);
+    } catch {
+      // runs are optional; ignore failures
+    }
+  }, [issueId]);
+
+  useEffect(() => {
+    loadRuns();
+  }, [loadRuns, refreshKey]);
+
+  async function handleStartRun() {
+    setRunBusy(true);
+    try {
+      await startIssueRun(issueId, runAgentId || undefined);
+      await loadRuns();
+      await load();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRunBusy(false);
+    }
+  }
+
+  async function handleStopRun() {
+    setRunBusy(true);
+    try {
+      await stopIssueRun(issueId);
+      await loadRuns();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRunBusy(false);
+    }
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -320,7 +374,7 @@ export default function IssueDetail({ issueId, issues, sessions, providers, refr
           <button className={`overlay-tab ${tab === 'comments' ? 'active' : ''}`} onClick={() => setTab('comments')}>
             评论{comments.length > 0 ? ` (${comments.length})` : ''}
           </button>
-          <button className={`overlay-tab ${tab === 'sessions' ? 'active' : ''}`} onClick={() => setTab('sessions')}>
+          <button className={`overlay-tab ${tab === 'sessions' ? 'active' : ''}`} onClick={() => { setTab('sessions'); void loadRuns(); }}>
             关联会话{issue.sessionIds.length > 0 ? ` (${issue.sessionIds.length})` : ''}
           </button>
         </div>
@@ -563,8 +617,52 @@ export default function IssueDetail({ issueId, issues, sessions, providers, refr
             </select>
             <button className="form-btn" disabled={!bindTarget} onClick={bindSession}>绑定</button>
           </div>
+
+          <div className="issue-section-divider">后台运行</div>
+          <div className="relation-add-row">
+            <select className="form-select" value={runAgentId} onChange={e => setRunAgentId(e.target.value)}>
+              <option value="">选择 Agent…</option>
+              {agents.filter(a => a.headless).map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+            {runActive ? (
+              <button className="form-btn" disabled={runBusy} onClick={handleStopRun}>
+                {runBusy ? '停止中...' : '■ 停止'}
+              </button>
+            ) : (
+              <button
+                className="form-btn primary"
+                disabled={runBusy || !runAgentId}
+                title={!runAgentId ? '请先选择一个 Agent' : '以后台无头模式运行此任务（产出自动成为关联会话）'}
+                onClick={handleStartRun}
+              >
+                {runBusy ? '启动中...' : '▶ 运行'}
+              </button>
+            )}
+          </div>
+          {runActive && <div className="issue-empty-hint">正在运行中…</div>}
+          {runs.length > 0 && (
+            <>
+              <div className="issue-section-divider">运行记录</div>
+              {runs.slice().reverse().map(r => (
+                <div className="activity-item" key={r.id}>
+                  <span className="activity-time">{new Date(r.startedAt).toLocaleString('zh-CN')}</span>
+                  <span className={`run-status-badge ${r.status}`}>{
+                    r.status === 'running' ? '运行中' : r.status === 'success' ? '成功' : r.status === 'stopped' ? '已停止' : '失败'
+                  }</span>
+                  <span className="activity-actor">{r.agentName}</span>
+                  {r.sessionId && (
+                    <span className="session-id-badge" title={r.sessionId}>{r.sessionId.slice(0, 8)}</span>
+                  )}
+                  {r.error && <span className="activity-change" title={r.error}>{r.error.slice(0, 60)}</span>}
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
+
     </>
   );
 }

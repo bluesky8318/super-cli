@@ -61,4 +61,16 @@ super-cli issue show <id> --comments --json        # 读需求
 super-cli issue claim <id> --session-id <sid>      # 认领
 super-cli issue comment <id> --add "..." --agent --session-id <sid>
 super-cli issue move <id> in_review --if-version N
+super-cli idea add "<内容> #标签"                   # 记录想法
+super-cli idea promote <id> --agent <agent>        # 想法转为 backlog 任务
+super-cli agent list --json                        # 查看可用的 agent 启动配置
 \`\`\`
+
+## 无头执行（issue run）
+
+用户可能通过 \`super-cli issue run <id> --agent <name>\` 以无头模式（headless）启动你执行任务。此时：
+
+- 首轮 prompt 中包含任务标题、描述和本工作流提示；你仍须遵守上述状态机纪律。
+- run 启动时若状态为 todo 会自动移入 in_progress；你无需再 claim，但应用 \`super-cli issue bind\` 语义已由 runner 自动完成（session 自动绑定）。
+- 完成后照常评论记录结果；\`done\` 仍只能由用户移动。
+- \`super-cli issue runs <id>\` 可查看该任务的执行历史。

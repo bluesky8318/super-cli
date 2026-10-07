@@ -10,7 +10,20 @@ export type IssueEventType =
   | 'issue.relation.updated'
   | 'comment.created'
   | 'comment.updated'
-  | 'comment.deleted';
+  | 'comment.deleted'
+  | 'idea.created'
+  | 'idea.updated'
+  | 'idea.archived'
+  | 'idea.restored'
+  | 'idea.deleted'
+  | 'idea.promoted'
+  | 'agent.created'
+  | 'agent.updated'
+  | 'agent.removed'
+  | 'run.started'
+  | 'run.finished';
+
+export type AppEventType = IssueEventType;
 
 export class EventHub {
   private clients = new Set<FastifyReply['raw']>();

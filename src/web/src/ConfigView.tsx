@@ -4,10 +4,12 @@ import {
   fetchMcpServers, addMcpServerApi, updateMcpServerApi, deleteMcpServerApi, copyMcpServerApi,
   fetchRules, fetchRuleContent, saveRuleContentApi,
   fetchHooks, fetchPermissions,
+  fetchAgents, createAgent, deleteAgent,
 } from './api/client.js';
+import type { AgentProfile } from './types.js';
 
 type CliProvider = 'claude-code' | 'qoder' | 'codex' | 'kimi' | 'pi' | 'opencode' | 'workbuddy' | 'traecode';
-type ConfigTab = 'skills' | 'mcp' | 'rules' | 'hooks' | 'permissions';
+type ConfigTab = 'skills' | 'mcp' | 'rules' | 'hooks' | 'permissions' | 'agents';
 
 interface ProviderInfo {
   id: CliProvider;
@@ -94,6 +96,7 @@ export default function ConfigView({ selectedProject, selectedProjectProviders, 
             <button className={`config-tab ${configTab === 'rules' ? 'active' : ''}`} onClick={() => setConfigTab('rules')}>Rules</button>
             <button className={`config-tab ${configTab === 'hooks' ? 'active' : ''}`} onClick={() => setConfigTab('hooks')}>Hooks</button>
             <button className={`config-tab ${configTab === 'permissions' ? 'active' : ''}`} onClick={() => setConfigTab('permissions')}>Permissions</button>
+            <button className={`config-tab ${configTab === 'agents' ? 'active' : ''}`} onClick={() => setConfigTab('agents')}>Agents</button>
           </div>
         </div>
         <div className="toolbar-right">
@@ -117,7 +120,98 @@ export default function ConfigView({ selectedProject, selectedProjectProviders, 
       {configTab === 'rules' && <RulesView providers={providers} activeProviders={activeProviders} selectedProject={selectedProject} />}
       {configTab === 'hooks' && <HooksView activeProviders={activeProviders} selectedProject={selectedProject} />}
       {configTab === 'permissions' && <PermissionsView activeProviders={activeProviders} selectedProject={selectedProject} />}
+      {configTab === 'agents' && <AgentsView providers={providers} />}
     </main>
+  );
+}
+
+function AgentsView({ providers }: { providers: ProviderInfo[] }) {
+  const [agents, setAgents] = useState<AgentProfile[]>([]);
+  const [name, setName] = useState('');
+  const [provider, setProvider] = useState<string>('claude-code');
+  const [model, setModel] = useState('');
+  const [workingDir, setWorkingDir] = useState('');
+  const [extraArgs, setExtraArgs] = useState('');
+
+  async function load() {
+    try {
+      const data = await fetchAgents();
+      setAgents(data.agents ?? []);
+    } catch (err) {
+      console.error('Failed to load agents', err);
+    }
+  }
+
+  useEffect(() => { void load(); }, []);
+
+  async function handleAdd() {
+    if (!name.trim()) return;
+    try {
+      await createAgent({
+        name: name.trim(),
+        provider,
+        model: model.trim() || undefined,
+        workingDir: workingDir.trim() || undefined,
+        extraArgs: extraArgs.trim() ? extraArgs.trim().split(/\s+/) : undefined,
+      });
+      setName(''); setModel(''); setWorkingDir(''); setExtraArgs('');
+      await load();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function handleRemove(agent: AgentProfile) {
+    if (!confirm(`确定删除 Agent "${agent.name}"？`)) return;
+    try {
+      await deleteAgent(agent.id);
+      await load();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <div className="config-body">
+      <div className="config-section">
+        <h3 className="config-section-title">Agent 启动配置</h3>
+        <p className="config-section-desc">
+          同一个 Agent 配置可用于两种启动模式：「新建会话」（打开终端窗口，交互式）和任务「运行」（后台无头执行，仅 Claude Code / Codex / Pi 支持无头）。
+        </p>
+        <div className="agents-list">
+          {agents.map(a => (
+            <div key={a.id} className="agent-row">
+              <span className="provider-badge small" style={{ background: PROVIDER_COLORS[a.provider] }}>
+                {PROVIDER_LABELS[a.provider]}
+              </span>
+              <span className="agent-name">{a.name}{a.builtin ? '（内置）' : ''}</span>
+              {a.headless
+                ? <span className="agent-headless-badge">无头 ✓</span>
+                : <span className="agent-headless-badge off">仅交互</span>}
+              {a.model && <span className="agent-meta">model: {a.model}</span>}
+              {a.workingDir && <span className="agent-meta" title={a.workingDir}>dir: {a.workingDir}</span>}
+              {a.extraArgs && a.extraArgs.length > 0 && <span className="agent-meta" title={a.extraArgs.join(' ')}>args: {a.extraArgs.join(' ')}</span>}
+              <span className="agent-spacer" />
+              {!a.builtin && (
+                <button className="form-btn" onClick={() => void handleRemove(a)}>删除</button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <h4 className="config-section-title">新建 Agent</h4>
+        <div className="agent-form">
+          <input className="form-input" placeholder="名称，如 claude-只读" value={name} onChange={e => setName(e.target.value)} />
+          <select className="form-select" value={provider} onChange={e => setProvider(e.target.value)}>
+            {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <input className="form-input" placeholder="模型（可选）" value={model} onChange={e => setModel(e.target.value)} />
+          <input className="form-input" placeholder="工作目录（可选，默认取任务项目目录）" value={workingDir} onChange={e => setWorkingDir(e.target.value)} />
+          <input className="form-input" placeholder="额外参数（可选，空格分隔，如 --permission-mode plan）" value={extraArgs} onChange={e => setExtraArgs(e.target.value)} />
+          <button className="form-btn primary" disabled={!name.trim()} onClick={() => void handleAdd()}>添加</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

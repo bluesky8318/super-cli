@@ -3,8 +3,9 @@ import type { CliProvider } from '../../core/types.js';
 import { SessionIndex, inferSessionStatus } from '../../core/session-index.js';
 import { SessionSearch } from '../../core/session-search.js';
 import { TerminalLauncher } from '../../core/terminal-launcher.js';
+import { AgentStore } from '../../core/agent-store.js';
 
-export function registerSessionRoutes(app: FastifyInstance, index: SessionIndex): void {
+export function registerSessionRoutes(app: FastifyInstance, index: SessionIndex, agentStore?: AgentStore): void {
   const search = new SessionSearch(undefined, index);
 
   app.get('/api/sessions', async (req) => {
@@ -111,12 +112,18 @@ export function registerSessionRoutes(app: FastifyInstance, index: SessionIndex)
   });
 
   app.post('/api/sessions/new', async (req, reply) => {
-    const { project, provider, prompt } = req.body as { project?: string; provider?: CliProvider; prompt?: string };
+    const { project, provider, prompt, agentId } = req.body as { project?: string; provider?: CliProvider; prompt?: string; agentId?: string };
     if (!project) {
       reply.code(400);
       return { error: 'project path is required' };
     }
-    const result = await launcher.launchNew(project, provider || 'claude-code', prompt);
+    let result;
+    if (agentId && agentStore) {
+      const agent = await agentStore.getAgent(agentId);
+      result = await launcher.launchNewWithProfile(project, agent, prompt);
+    } else {
+      result = await launcher.launchNew(project, provider || 'claude-code', prompt);
+    }
     if (result.action === 'error') {
       reply.code(500);
     }

@@ -70,11 +70,11 @@ export async function resumeSession(id: string) {
   return res.json();
 }
 
-export async function createNewSession(project: string, provider?: string, prompt?: string) {
+export async function createNewSession(project: string, provider?: string, prompt?: string, agentId?: string) {
   const res = await fetch(`${API_BASE}/sessions/new`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ project, provider, prompt }),
+    body: JSON.stringify({ project, provider, prompt, agentId }),
   });
   return res.json();
 }
@@ -392,4 +392,216 @@ export async function unbindIssueSession(id: string, sessionId: string, version:
 
 export async function fetchIssueActivities(id: string) {
   return jsonOrThrow(await fetch(`${API_BASE}/issues/${encodeURIComponent(id)}/activities`));
+}
+
+// --- Ideas (想法) ---
+
+export async function fetchIdeas(params?: Record<string, string>) {
+  const url = new URL(`${API_BASE}/ideas`, window.location.origin);
+  if (params) for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  return jsonOrThrow(await fetch(url));
+}
+
+export async function fetchIdeaCategories(): Promise<{ categories: import('../types.js').IdeaCategory[] }> {
+  return jsonOrThrow(await fetch(`${API_BASE}/ideas/categories`));
+}
+
+export async function createIdea(data: { content: string }) {
+  return jsonOrThrow(await fetch(`${API_BASE}/ideas`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }));
+}
+
+export async function categorizeIdea(id: string, category: string) {
+  return jsonOrThrow(await fetch(`${API_BASE}/ideas/${encodeURIComponent(id)}/categorize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category }),
+  }));
+}
+
+export async function commentIdea(id: string, body: string) {
+  return jsonOrThrow(await fetch(`${API_BASE}/ideas/${encodeURIComponent(id)}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ body }),
+  }));
+}
+
+export async function abandonIdea(id: string) {
+  return jsonOrThrow(await fetch(`${API_BASE}/ideas/${encodeURIComponent(id)}/abandon`, { method: 'POST' }));
+}
+
+export async function restoreIdea(id: string) {
+  return jsonOrThrow(await fetch(`${API_BASE}/ideas/${encodeURIComponent(id)}/restore`, { method: 'POST' }));
+}
+
+export async function archiveIdea(id: string) {
+  return jsonOrThrow(await fetch(`${API_BASE}/ideas/${encodeURIComponent(id)}/archive`, { method: 'POST' }));
+}
+
+export async function promoteIdea(id: string, data?: { title?: string; project?: string; priority?: string }) {
+  return jsonOrThrow(await fetch(`${API_BASE}/ideas/${encodeURIComponent(id)}/promote`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data ?? {}),
+  }));
+}
+
+// --- Agent profiles ---
+
+export async function fetchAgents() {
+  return jsonOrThrow(await fetch(`${API_BASE}/agents`));
+}
+
+export async function createAgent(data: {
+  name: string;
+  provider: string;
+  model?: string;
+  workingDir?: string;
+  extraArgs?: string[];
+}) {
+  return jsonOrThrow(await fetch(`${API_BASE}/agents`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }));
+}
+
+export async function updateAgent(id: string, data: {
+  name?: string;
+  model?: string | null;
+  workingDir?: string | null;
+  extraArgs?: string[] | null;
+}) {
+  return jsonOrThrow(await fetch(`${API_BASE}/agents/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }));
+}
+
+export async function deleteAgent(id: string) {
+  return jsonOrThrow(await fetch(`${API_BASE}/agents/${encodeURIComponent(id)}`, { method: 'DELETE' }));
+}
+
+// --- Issue runs ---
+
+export async function fetchIssueRuns(id: string) {
+  return jsonOrThrow(await fetch(`${API_BASE}/issues/${encodeURIComponent(id)}/runs`));
+}
+
+export async function startIssueRun(id: string, agentId?: string) {
+  return jsonOrThrow(await fetch(`${API_BASE}/issues/${encodeURIComponent(id)}/runs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(agentId ? { agentId } : {}),
+  }));
+}
+
+export async function stopIssueRun(id: string) {
+  return jsonOrThrow(await fetch(`${API_BASE}/issues/${encodeURIComponent(id)}/runs/stop`, { method: 'POST' }));
+}
+
+// --- System config ---
+
+export async function fetchSystemConfig() {
+  return jsonOrThrow(await fetch(`${API_BASE}/config/system`));
+}
+
+export async function updateSystemConfig(data: Record<string, unknown>) {
+  return jsonOrThrow(await fetch(`${API_BASE}/config/system`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }));
+}
+
+export async function revealSuperCliHome() {
+  return jsonOrThrow(await fetch(`${API_BASE}/config/system/reveal`, { method: 'POST' }));
+}
+
+export async function fetchSystemDataFile(name: string) {
+  return jsonOrThrow(await fetch(`${API_BASE}/config/system/files/${encodeURIComponent(name)}`));
+}
+
+export async function fetchSystemRunFile(file: string) {
+  return jsonOrThrow(await fetch(`${API_BASE}/config/system/files/runs/${encodeURIComponent(file)}`));
+}
+
+// --- WeChat board ---
+
+export interface WechatStatusData {
+  reachable: boolean;
+  ready?: boolean;
+  version?: string;
+  account?: { wxid: string; name: string };
+  error?: string;
+}
+
+export interface WechatDashboardData {
+  date: string;
+  cards: {
+    totalMessages: number;
+    activeChats: number;
+    groupChats: number;
+    totalGroups: number;
+    silentGroups: number;
+    mentions: number;
+    links: number;
+    myMessages: number;
+  };
+  hourly: number[];
+  activeChats: {
+    talker: string;
+    name: string;
+    isGroup: boolean;
+    messageCount: number;
+    lastTime: number;
+    senders: string[];
+  }[];
+  mentions: { time: number; chatName: string; talker: string; sender: string; snippet: string }[];
+  links: { url: string; domain: string; title: string; chatName: string; sender: string; time: number; count: number }[];
+  people: { sender: string; messageCount: number; chatCount: number; lastTime: number }[];
+}
+
+export interface WechatReportData {
+  talker: string;
+  chatName: string;
+  date: string;
+  markdown: string;
+  stats: {
+    totalMessages: number;
+    activeMembers: number;
+    links: number;
+    mentions: number;
+    firstTime?: number;
+    lastTime?: number;
+  };
+}
+
+export async function fetchWechatStatus(): Promise<WechatStatusData> {
+  return jsonOrThrow(await fetch(`${API_BASE}/wechat/status`));
+}
+
+export async function fetchWechatDashboard(date: string): Promise<WechatDashboardData> {
+  return jsonOrThrow(await fetch(`${API_BASE}/wechat/dashboard?date=${encodeURIComponent(date)}`));
+}
+
+export interface WechatSearchResults {
+  groups: { talker: string; name: string; isGroup: boolean; summary: string; lastTime?: number }[];
+  people: { userName: string; name: string; alias: string; nickName: string }[];
+  messages: { serverId?: number; talker: string; chatName: string; sender: string; snippet: string; time?: number }[];
+}
+
+export async function searchWechat(q: string): Promise<WechatSearchResults> {
+  return jsonOrThrow(await fetch(`${API_BASE}/wechat/search?q=${encodeURIComponent(q)}`));
+}
+
+export async function fetchWechatReport(talker: string, date: string, name?: string): Promise<WechatReportData> {
+  const params = new URLSearchParams({ talker, date });
+  if (name) params.set('name', name);
+  return jsonOrThrow(await fetch(`${API_BASE}/wechat/report?${params}`));
 }

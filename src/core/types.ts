@@ -116,6 +116,8 @@ export interface Issue {
   sortOrder: number;
   version: number;
   sessionIds: string[];
+  lastRunAt?: string;
+  runCount?: number;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;
@@ -157,6 +159,96 @@ export interface IssueBoardData {
   activities: IssueActivity[];
 }
 
+// --- Idea (想法) ---
+
+// --- Idea（想法）---
+// draft: json-only, no category yet, nothing else allowed.
+// incubating: categorized, backed by an md doc under <project>/00-Inbox/Idea/.
+// promoted: turned into an Issue; the md doc is the task's requirement doc.
+// Terminal states: abandoned（想做但外部条件不满足，可恢复）/ archived（结束归档，不再流转）.
+export type IdeaStatus = 'draft' | 'incubating' | 'promoted' | 'abandoned' | 'archived';
+
+export interface IdeaCategory {
+  key: string;
+  label: string;
+  /** Absolute project path the category's idea docs live under. */
+  project: string;
+}
+
+export interface IdeaComment {
+  at: string;
+  body: string;
+}
+
+export interface Idea {
+  id: string;
+  identifier: string; // IDEA-n
+  title: string;
+  /** Original one-line record. Immutable after creation. */
+  content: string;
+  status: IdeaStatus;
+  category?: string;      // IdeaCategory.key
+  project?: string;       // decoded absolute path (from category)
+  docPath?: string;       // md file path, set when categorized
+  comments: IdeaComment[];
+  promotedIssueId?: string;
+  promotedIssueIdentifier?: string;
+  /** Joined from the issue store at read time. */
+  issueStatus?: IssueStatus;
+  issueTitle?: string;
+  issueProject?: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IdeaStoreData {
+  version: 1;
+  nextIdeaNumber: number;
+  ideas: Record<string, Idea>;
+}
+
+// --- Agent profile (agent 启动配置) ---
+
+export interface AgentProfile {
+  id: string;
+  name: string;
+  provider: CliProvider;
+  model?: string;
+  workingDir?: string;
+  extraArgs?: string[];
+  env?: Record<string, string>;
+  /** Builtin profiles are created at first launch from provider registry defaults; cannot be removed. */
+  builtin?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentStoreData {
+  version: 1;
+  agents: Record<string, AgentProfile>;
+}
+
+// --- Issue run (执行记录，审计投影) ---
+
+export type RunTrigger = 'manual';
+export type RunStatus = 'running' | 'success' | 'failed' | 'stopped';
+
+export interface IssueRun {
+  id: string;
+  issueId: string;
+  agentId: string;
+  agentName: string;
+  provider: CliProvider;
+  trigger: RunTrigger;
+  startedAt: string;
+  finishedAt?: string;
+  status: RunStatus;
+  sessionId?: string;
+  exitCode?: number;
+  error?: string;
+}
+
 export interface AppConfig {
   version: number;
   sessions: Record<string, TaskLabel>;
@@ -164,8 +256,9 @@ export interface AppConfig {
   pinnedProjects?: string[];
   settings: {
     defaultPort?: number;
-    claudeHome?: string;
     terminal?: TerminalType;
+    /** App name/command used to open project folders (mac: open -a, win: command). Empty = OS default. */
+    fileManager?: string;
   };
 }
 
@@ -203,8 +296,11 @@ export interface SearchHit {
 }
 
 export interface ProjectInfo {
+  /** Stable cross-provider identity: the decoded absolute project path. */
   encoded: string;
   decoded: string;
+  /** Provider-specific on-disk dir names that map to this project (legacy ids). */
+  aliases: string[];
   providers: CliProvider[];
   sessionCount: number;
   lastTimestamp?: string;

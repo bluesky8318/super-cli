@@ -1,8 +1,9 @@
 import { execSync, spawn as cpSpawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import type { CliProvider, TerminalType } from './types.js';
+import type { AgentProfile, CliProvider, TerminalType } from './types.js';
 import { ConfigManager } from './config.js';
 import { getProvider } from './providers.js';
+import { buildInteractiveArgs } from './task-runner.js';
 
 export interface LaunchResult {
   action: 'focused' | 'launched' | 'error';
@@ -46,6 +47,35 @@ export class TerminalLauncher {
       parts.push(this.shellEscape(prompt));
     }
     const cmd = parts.join(' ');
+
+    try {
+      await this.launchInTerminal(terminal, cmd, cwd);
+      return { action: 'launched', terminal };
+    } catch (err: any) {
+      return { action: 'error', message: err.message ?? String(err) };
+    }
+  }
+
+  /** Launch an interactive terminal session from an agent profile (args/model/env overrides). */
+  async launchNewWithProfile(cwd: string, profile: AgentProfile, prompt?: string): Promise<LaunchResult> {
+    const terminal = await this.getTerminal();
+
+    if (!existsSync(cwd)) {
+      return { action: 'error', message: `路径不存在: ${cwd}` };
+    }
+
+    const providerConfig = getProvider(profile.provider);
+    const parts = [providerConfig.command, ...buildInteractiveArgs(profile)];
+    if (prompt && providerConfig.supportsPrompt) {
+      parts.push(this.shellEscape(prompt));
+    }
+    let cmd = parts.join(' ');
+    if (profile.env && Object.keys(profile.env).length > 0) {
+      const prefix = Object.entries(profile.env)
+        .map(([k, v]) => `${k}=${this.shellEscape(v)}`)
+        .join(' ');
+      cmd = `${prefix} ${cmd}`;
+    }
 
     try {
       await this.launchInTerminal(terminal, cmd, cwd);

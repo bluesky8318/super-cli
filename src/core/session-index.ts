@@ -59,6 +59,7 @@ export class SessionIndex {
   private built = false;
   private lastBuildTime = 0;
   private readonly ttlMs: number;
+  private inflight: Promise<void> | null = null;
 
   constructor(
     readers?: (SessionReader | CodexReader)[],
@@ -83,6 +84,23 @@ export class SessionIndex {
   }
 
   async buildIndex(options?: { forceRefresh?: boolean }): Promise<void> {
+    const now = Date.now();
+    if (this.built && !options?.forceRefresh && (now - this.lastBuildTime) < this.ttlMs) return;
+    // Concurrent callers share one in-flight build instead of each running a full scan.
+    if (this.inflight) {
+      if (!options?.forceRefresh) return this.inflight;
+      await this.inflight;
+    }
+    const task = this.doBuildIndex(options);
+    this.inflight = task;
+    try {
+      await task;
+    } finally {
+      if (this.inflight === task) this.inflight = null;
+    }
+  }
+
+  private async doBuildIndex(options?: { forceRefresh?: boolean }): Promise<void> {
     const now = Date.now();
     if (this.built && !options?.forceRefresh && (now - this.lastBuildTime) < this.ttlMs) return;
 
@@ -196,31 +214,40 @@ export class SessionIndex {
 
   async getProjects(provider?: CliProvider): Promise<ProjectInfo[]> {
     await this.buildIndex();
-    const projectMap = new Map<string, ProjectInfo & { providerSet: Set<CliProvider> }>();
+    // Group by decoded path so the same project recorded by different providers
+    // (each with its own dir-name encoding) merges into one row.
+    const projectMap = new Map<string, ProjectInfo & { providerSet: Set<CliProvider>; aliasSet: Set<string> }>();
     for (const meta of this.cache.values()) {
       if (provider && meta.provider !== provider) continue;
-      const key = meta.projectEncoded;
+      const key = meta.project;
       const existing = projectMap.get(key);
       if (existing) {
         existing.sessionCount++;
         existing.providerSet.add(meta.provider);
+        existing.aliasSet.add(meta.projectEncoded);
         if (meta.lastTimestamp && (!existing.lastTimestamp || meta.lastTimestamp > existing.lastTimestamp)) {
           existing.lastTimestamp = meta.lastTimestamp;
         }
       } else {
         const providerSet = new Set<CliProvider>([meta.provider]);
         projectMap.set(key, {
-          encoded: meta.projectEncoded,
+          encoded: meta.project,
           decoded: meta.project,
+          aliases: [],
           providers: [],
           sessionCount: 1,
           lastTimestamp: meta.lastTimestamp,
           providerSet,
+          aliasSet: new Set([meta.projectEncoded]),
         });
       }
     }
     return [...projectMap.values()]
-      .map(({ providerSet, ...rest }) => ({ ...rest, providers: [...providerSet] }))
+      .map(({ providerSet, aliasSet, ...rest }) => ({
+        ...rest,
+        providers: [...providerSet],
+        aliases: [...aliasSet],
+      }))
       .sort((a, b) => b.sessionCount - a.sessionCount);
   }
 

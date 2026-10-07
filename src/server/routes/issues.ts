@@ -1,7 +1,17 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { IssueStore, VersionConflictError, IssueNotFoundError, IssueStateError } from '../../core/issue-store.js';
+import { AgentStore } from '../../core/agent-store.js';
+import { TaskRunner, RunStateError } from '../../core/task-runner.js';
 import type { IssueStatus } from '../../core/types.js';
 import type { EventHub } from '../events.js';
+
+function sendRunError(reply: FastifyReply, err: unknown): { error: { code: string; message: string } } {
+  if (err instanceof RunStateError) {
+    reply.code(400);
+    return { error: { code: err.code, message: err.message } };
+  }
+  return sendError(reply, err);
+}
 
 function sendError(reply: FastifyReply, err: unknown): { error: { code: string; message: string } } {
   if (err instanceof VersionConflictError) {
@@ -24,7 +34,7 @@ function actorFrom(req: { headers: Record<string, unknown> }): 'user' | 'agent' 
   return h === 'agent' || h === 'cli' ? h : 'user';
 }
 
-export function registerIssueRoutes(app: FastifyInstance, issueStore: IssueStore, hub: EventHub): void {
+export function registerIssueRoutes(app: FastifyInstance, issueStore: IssueStore, hub: EventHub, runner: TaskRunner, agentStore: AgentStore): void {
 
   app.get('/api/issues', async (req) => {
     const query = req.query as Record<string, string>;
@@ -39,6 +49,10 @@ export function registerIssueRoutes(app: FastifyInstance, issueStore: IssueStore
 
   app.post('/api/issues', async (req, reply) => {
     const body = req.body as Record<string, unknown>;
+    if (!body.projectEncoded || typeof body.projectEncoded !== 'string') {
+      reply.code(400);
+      return { error: { code: 'PROJECT_REQUIRED', message: '任务必须有归属项目' } };
+    }
     try {
       const issue = await issueStore.createIssue({
         title: body.title as string,
@@ -278,6 +292,47 @@ export function registerIssueRoutes(app: FastifyInstance, issueStore: IssueStore
       return { activities };
     } catch (err) {
       return sendError(reply, err);
+    }
+  });
+
+  app.get('/api/issues/:id/runs', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const issue = await issueStore.getIssue(id);
+      const runs = await runner.listRuns(issue.id);
+      return { runs, active: runner.isRunning(issue.id) };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.post('/api/issues/:id/runs', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    try {
+      const issue = await issueStore.getIssue(id);
+      const agentId = body.agentId as string | undefined;
+      if (!agentId) {
+        reply.code(400);
+        return { error: { code: 'AGENT_REQUIRED', message: '请选择一个 Agent 再运行' } };
+      }
+      const agent = await agentStore.getAgent(agentId);
+      const run = await runner.startRun(issue, agent);
+      reply.code(201);
+      return { run };
+    } catch (err) {
+      return sendRunError(reply, err);
+    }
+  });
+
+  app.post('/api/issues/:id/runs/stop', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const issue = await issueStore.getIssue(id);
+      const run = await runner.stopRun(issue.id);
+      return { run };
+    } catch (err) {
+      return sendRunError(reply, err);
     }
   });
 

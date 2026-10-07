@@ -2,6 +2,8 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import Table from 'cli-table3';
 import { IssueStore, VersionConflictError, IssueNotFoundError, IssueStateError } from '../../core/issue-store.js';
+import { AgentStore } from '../../core/agent-store.js';
+import { TaskRunner, RunStateError } from '../../core/task-runner.js';
 import { formatJson } from '../output.js';
 import type { Issue, IssuePriority, IssueStatus } from '../../core/types.js';
 
@@ -13,6 +15,10 @@ function fail(err: unknown): never {
   if (err instanceof VersionConflictError || err instanceof IssueNotFoundError || err instanceof IssueStateError) {
     console.error(formatJson({ error: { code: err.code, message: err.message } }));
     process.exit(err instanceof VersionConflictError ? 2 : 1);
+  }
+  if (err instanceof RunStateError) {
+    console.error(formatJson({ error: { code: err.code, message: err.message } }));
+    process.exit(1);
   }
   throw err;
 }
@@ -76,7 +82,8 @@ function requireVersion(opts: { ifVersion?: string }, store: Promise<Issue>): Pr
 export function registerIssueCommand(program: Command): void {
   const issue = program
     .command('issue')
-    .description('Manage issues on the task board');
+    .alias('task')
+    .description('Manage issues (tasks) on the task board');
 
   issue
     .command('list')
@@ -149,7 +156,7 @@ export function registerIssueCommand(program: Command): void {
     .command('create')
     .description('Create an issue')
     .requiredOption('--title <title>', 'Issue title')
-    .option('--project <encoded>', 'Project (encoded path)')
+    .requiredOption('--project <path>', 'Project (absolute path) — 任务必须有归属项目')
     .option('--desc <text>', 'Description (markdown)')
     .option('--priority <priority>', 'none|urgent|high|medium|low')
     .option('--label <labels>', 'Comma-separated labels')
@@ -330,6 +337,101 @@ export function registerIssueCommand(program: Command): void {
           console.log(c.body, '\n');
         }
         if (nextCursor) console.log(chalk.dim(`nextCursor: ${nextCursor}`));
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  issue
+    .command('run <id>')
+    .description('Run an issue headlessly with an agent profile (streams output; Ctrl+C to stop)')
+    .option('--agent <agent>', 'Agent profile (id or name), required')
+    .option('--json', 'Output final result as JSON')
+    .action(async (id, opts) => {
+      const store = new IssueStore();
+      const agentStore = new AgentStore();
+      try {
+        const found = await store.getIssue(id);
+        if (!opts.agent) throw new RunStateError('请用 --agent 指定一个 Agent 配置');
+        const agent = await agentStore.getAgent(opts.agent);
+        const runner = new TaskRunner(store);
+        const run = await runner.startRun(found, agent, {
+          onOutput: opts.json ? undefined : (chunk) => process.stdout.write(chunk),
+        });
+        // Wait for the child to settle before exiting the CLI process.
+        await new Promise<void>((resolve) => {
+          runner.setEventListener((event) => {
+            if (event.type === 'run.finished' && event.run.id === run.id) resolve();
+          });
+        });
+        const [finalRun] = (await runner.listRuns(found.id)).filter(r => r.id === run.id);
+        if (opts.json) {
+          console.log(formatJson(finalRun));
+        } else {
+          console.log('');
+          console.log(
+            finalRun.status === 'success'
+              ? chalk.green(`✓ Run ${finalRun.id.slice(0, 8)} finished (session ${finalRun.sessionId?.slice(0, 8) ?? '-'})`)
+              : chalk.red(`✗ Run ${finalRun.id.slice(0, 8)} ${finalRun.status}${finalRun.error ? `: ${finalRun.error}` : ''}`),
+          );
+        }
+        process.exit(finalRun.status === 'success' ? 0 : 1);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  issue
+    .command('runs <id>')
+    .description('List run history of an issue')
+    .option('--json', 'Output as JSON')
+    .action(async (id, opts) => {
+      const store = new IssueStore();
+      try {
+        const found = await store.getIssue(id);
+        const runs = await new TaskRunner(store).listRuns(found.id);
+        if (opts.json) {
+          console.log(formatJson(runs));
+          return;
+        }
+        if (runs.length === 0) {
+          console.log(chalk.dim('No runs found.'));
+          return;
+        }
+        const table = new Table({
+          head: ['Run', 'Agent', 'Status', 'Session', 'Started', 'Duration'],
+          style: { head: ['cyan'] },
+          colWidths: [10, 20, 10, 10, 22, 10],
+        });
+        for (const r of runs.slice().reverse()) {
+          const duration = r.finishedAt
+            ? `${((new Date(r.finishedAt).getTime() - new Date(r.startedAt).getTime()) / 1000).toFixed(0)}s`
+            : '-';
+          table.push([
+            r.id.slice(0, 8),
+            r.agentName,
+            r.status,
+            r.sessionId?.slice(0, 8) ?? '-',
+            new Date(r.startedAt).toLocaleString(),
+            duration,
+          ]);
+        }
+        console.log(table.toString());
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  issue
+    .command('stop <id>')
+    .description('Stop the active run of an issue (only runs started in this process)')
+    .option('--json', 'Output as JSON')
+    .action(async (id, opts) => {
+      const store = new IssueStore();
+      try {
+        const found = await store.getIssue(id);
+        const run = await new TaskRunner(store).stopRun(found.id);
+        console.log(opts.json ? formatJson(run) : `Stopped run ${run.id.slice(0, 8)}`);
       } catch (err) {
         fail(err);
       }

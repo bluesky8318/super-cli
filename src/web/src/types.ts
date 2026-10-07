@@ -49,6 +49,8 @@ export interface Issue {
   sortOrder: number;
   version: number;
   sessionIds: string[];
+  lastRunAt?: string;
+  runCount?: number;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;
@@ -75,6 +77,68 @@ export interface IssueComment {
   version: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export type IdeaStatus = 'draft' | 'incubating' | 'promoted' | 'abandoned' | 'archived';
+
+export interface IdeaCategory {
+  key: string;
+  label: string;
+  project: string;
+}
+
+export interface IdeaComment {
+  at: string;
+  body: string;
+}
+
+export interface Idea {
+  id: string;
+  identifier: string;
+  title: string;
+  content: string;
+  status: IdeaStatus;
+  category?: string;
+  project?: string;
+  docPath?: string;
+  comments: IdeaComment[];
+  promotedIssueId?: string;
+  promotedIssueIdentifier?: string;
+  issueStatus?: string;
+  issueTitle?: string;
+  issueProject?: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentProfile {
+  id: string;
+  name: string;
+  provider: CliProvider;
+  model?: string;
+  workingDir?: string;
+  extraArgs?: string[];
+  envKeys?: string[];
+  builtin?: boolean;
+  headless?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IssueRun {
+  id: string;
+  issueId: string;
+  agentId: string;
+  agentName: string;
+  provider: CliProvider;
+  trigger: 'manual';
+  startedAt: string;
+  finishedAt?: string;
+  status: 'running' | 'success' | 'failed' | 'stopped';
+  sessionId?: string;
+  exitCode?: number;
+  error?: string;
 }
 
 export interface IssueActivity {

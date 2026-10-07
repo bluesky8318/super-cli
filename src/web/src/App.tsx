@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { fetchSessions, fetchProjects, fetchSessionMessages, fetchTasks, resumeSession, createNewSession, fetchProjectDetail, archiveProject, unarchiveProject, pinProject, unpinProject, fetchProviders, openProjectInFinder, openProjectInTerminal, refreshCache, fetchProjectFiles, fetchProjectFileContent, fetchIssues, moveIssue, ApiError } from './api/client.js';
+import { fetchSystemConfig, createIdea, fetchSessions, fetchProjects, fetchSessionMessages, fetchTasks, resumeSession, createNewSession, fetchProjectDetail, archiveProject, unarchiveProject, pinProject, unpinProject, fetchProviders, openProjectInFinder, openProjectInTerminal, refreshCache, fetchProjectFiles, fetchProjectFileContent, fetchIssues, fetchAgents, moveIssue, ApiError } from './api/client.js';
 import ConfigView from './ConfigView.js';
+import SystemConfigView from './components/SystemConfigView.js';
 import IssueCard from './components/IssueCard.js';
 import IssueDetail from './components/IssueDetail.js';
+import IdeasView from './components/IdeasView.js';
+import WeChatView from './components/WeChatView.js';
 import NewIssueModal from './components/NewIssueModal.js';
 import BoardColumnHeader from './components/BoardColumnHeader.js';
 import { PROVIDER_COLORS, PROVIDER_LABELS, ISSUE_COLUMNS, sessionStatusToColumn } from './constants.js';
-import type { CliProvider, Issue, IssueStatus, IssueSummary, ProviderInfo, SessionItem } from './types.js';
+import type { AgentProfile, CliProvider, Issue, IssueStatus, IssueSummary, ProviderInfo, SessionItem } from './types.js';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-typescript.js';
 import 'prismjs/components/prism-jsx.js';
@@ -63,12 +66,66 @@ interface ProjectDetailData {
   packageManager?: string;
 }
 
+/** Global floating idea capture — one sentence, from anywhere. */
+function IdeaQuickCapture() {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [savedTip, setSavedTip] = useState('');
+
+  const save = async () => {
+    const content = text.trim();
+    if (!content) return;
+    const res = await createIdea({ content });
+    setText('');
+    setSavedTip(`已记录 ${res.idea?.identifier ?? ''}`);
+    window.dispatchEvent(new CustomEvent('super-cli:idea-captured'));
+    setTimeout(() => { setSavedTip(''); setOpen(false); }, 900);
+  };
+
+  return (
+    <>
+      {open && (
+        <div className="idea-quick-panel">
+          <textarea
+            autoFocus
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void save();
+              if (e.key === 'Escape') setOpen(false);
+            }}
+            placeholder="记录一个想法…（⌘/Ctrl + Enter 保存）"
+            rows={3}
+          />
+          <div className="idea-quick-actions">
+            {savedTip && <span className="idea-quick-saved">{savedTip}</span>}
+            <button className="btn" onClick={() => setOpen(false)}>取消</button>
+            <button className="btn-primary" disabled={!text.trim()} onClick={() => void save()}>记录</button>
+          </div>
+        </div>
+      )}
+      <button
+        className={`idea-fab${open ? ' idea-fab-open' : ''}`}
+        title="记录想法"
+        onClick={() => setOpen(o => !o)}
+      >
+        {open ? '✕' : '💡'}
+      </button>
+    </>
+  );
+}
+
 export default function App() {
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('theme') as Theme) || 'light');
-  const [appMode, setAppMode] = useState<'task' | 'config'>(() => {
+  // Nav groups with sub-menus are collapsed by default; the group containing the
+  // active mode always shows expanded.
+  const [collapsedNav, setCollapsedNav] = useState<Set<string>>(new Set(['inspiration', 'config']));
+  const [appMode, setAppMode] = useState<'ideas' | 'task' | 'inspiration' | 'config' | 'system'>(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('mode') === 'config' ? 'config' : 'task';
+    const mode = params.get('mode');
+    return mode === 'task' || mode === 'inspiration' || mode === 'config' || mode === 'system' ? mode : 'ideas';
   });
+  const [agents, setAgents] = useState<AgentProfile[]>([]);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [selectedProviders, setSelectedProviders] = useState<CliProvider[]>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -98,6 +155,10 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     return (params.get('view') as ViewMode) || 'board';
   });
+  const [taskTab, setTaskTab] = useState<'issues' | 'sessions'>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('tab') === 'sessions' ? 'sessions' : 'issues';
+  });
   const [sortMode, setSortMode] = useState<SortMode>(() => {
     const params = new URLSearchParams(window.location.search);
     return (params.get('sort') as SortMode) || 'time-desc';
@@ -117,10 +178,45 @@ export default function App() {
   const [resumeStatus, setResumeStatus] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [archivedCollapsed, setArchivedCollapsed] = useState(true);
+  const [projectSearch, setProjectSearch] = useState('');
+  const [allLimit, setAllLimit] = useState(10);
+  const [archivedLimit, setArchivedLimit] = useState(10);
+
+  /** Subsequence fuzzy match, case-insensitive. */
+  function fuzzyMatch(query: string, target: string): boolean {
+    const q = query.toLowerCase();
+    const t = target.toLowerCase();
+    let i = 0;
+    for (const ch of t) {
+      if (ch === q[i]) i++;
+      if (i >= q.length) return true;
+    }
+    return q.length === 0;
+  }
+
+  // Selecting a project jumps to its task view; ideas filter by it too.
+  // Project selection has the highest priority: the provider filter is clamped
+  // to the providers actually present in the selected project.
+  function selectProject(decoded: string | null) {
+    setSelectedProject(decoded);
+    setAppMode('task');
+    if (decoded) {
+      const proj = projects.find(p => p.decoded === decoded);
+      if (proj) {
+        setSelectedProviders(prev => prev.filter(id => proj.providers.includes(id)));
+      }
+    }
+  }
   const [providerDropdownOpen, setProviderDropdownOpen] = useState(false);
   const [newTaskDropdownOpen, setNewTaskDropdownOpen] = useState(false);
   const [projectDetail, setProjectDetail] = useState<ProjectDetailData | null>(null);
   const [overlayTab, setOverlayTab] = useState<'detail' | 'files'>('detail');
+  // Right-side project panel (project detail + file browser) in task view.
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  // Default panel width: one third of the viewport, clamped to a sane range.
+  const [projectPanelWidth, setProjectPanelWidth] = useState(() =>
+    Math.max(320, Math.min(1200, Math.round(window.innerWidth / 2))));
+  const [fileManagerLabel, setFileManagerLabel] = useState('Finder');
   const [contextMenu, setContextMenu] = useState<{ encoded: string; decoded: string; pinned: boolean; archived: boolean; x: number; y: number } | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('sidebar-width');
@@ -138,13 +234,14 @@ export default function App() {
     if (viewMode !== 'board') params.set('view', viewMode);
     if (sortMode !== 'time-desc') params.set('sort', sortMode);
     if (selectedSession) params.set('session', selectedSession.sessionId);
+    if (taskTab !== 'issues') params.set('tab', taskTab);
     const isTimeBased = sortMode === 'time-desc' || sortMode === 'time-asc';
     if (isTimeBased && !groupByDate) params.set('group', 'off');
     if (!isTimeBased && groupByDate) params.set('group', 'date');
     const qs = params.toString();
     const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState(null, '', newUrl);
-  }, [appMode, selectedProviders, selectedProject, viewMode, sortMode, selectedSession, groupByDate]);
+  }, [appMode, selectedProviders, selectedProject, viewMode, sortMode, selectedSession, groupByDate, taskTab]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -157,8 +254,7 @@ export default function App() {
 
   useEffect(() => {
     if (providers.length > 0) {
-      const providerParam = selectedProviders.length === 1 ? { provider: selectedProviders[0] } : undefined;
-      fetchProjects(providerParam).then(data => {
+      fetchProjects().then(data => {
         setProjects(data.projects ?? []);
       });
     }
@@ -168,16 +264,32 @@ export default function App() {
     loadSessions();
   }, [selectedProject, selectedProviders, sortMode]);
 
+  // Call this render's loadIssues directly: going through loadIssuesRef here
+  // would execute the PREVIOUS render's closure (stale project filter).
+  useEffect(() => {
+    void loadIssues();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProject]);
+
   // Refetch issues for the current project filter (used by SSE events and conflict recovery).
   function issueQueryParams(): Record<string, string> {
-    // selectedProject is the decoded path; the API filters on the encoded form.
-    return selectedProject ? { project: selectedProject.replace(/\//g, '-') } : {};
+    // Issue project identity is the decoded absolute path (canonical).
+    return selectedProject ? { project: selectedProject } : {};
   }
+
+  const pendingIssueRef = useRef<string | null>(null);
 
   async function loadIssues() {
     try {
       const data = await fetchIssues(issueQueryParams());
-      setIssues(data.issues ?? []);
+      const list = data.issues ?? [];
+      setIssues(list);
+      // Honor a pending jump (e.g. from an idea card) once issues are loaded.
+      if (pendingIssueRef.current) {
+        const hit = list.find((i: IssueSummary) => i.identifier === pendingIssueRef.current);
+        if (hit) setSelectedIssueId(hit.id);
+        pendingIssueRef.current = null;
+      }
     } catch (e) {
       console.error('Failed to load issues', e);
     }
@@ -203,6 +315,7 @@ export default function App() {
     const eventNames = [
       'issue.created', 'issue.updated', 'issue.moved', 'issue.archived', 'issue.restored',
       'issue.deleted', 'issue.relation.updated', 'comment.created', 'comment.updated', 'comment.deleted',
+      'run.started', 'run.finished', 'idea.promoted',
     ];
     eventNames.forEach(name => es.addEventListener(name, scheduleRefresh));
     es.onopen = () => {
@@ -217,13 +330,24 @@ export default function App() {
   }, []);
 
   async function loadData() {
-    const providerParam = selectedProviders.length === 1 ? { provider: selectedProviders[0] } : undefined;
-    const [projData, providerData] = await Promise.all([
-      fetchProjects(providerParam),
+    const [projData, providerData, agentData] = await Promise.all([
+      fetchProjects(),
       fetchProviders(),
+      // Agents is an auxiliary list (new-session dropdown); a stale server without
+      // /api/agents must not break the whole page load.
+      fetchAgents().catch(() => ({ agents: [] })),
     ]);
     setProjects(projData.projects ?? []);
     setProviders(providerData.providers ?? []);
+    setAgents(agentData.agents ?? []);
+    // File-manager label for "open folder" actions (configurable in 系统配置).
+    fetchSystemConfig()
+      .then(cfg => {
+        const custom = typeof cfg.settings?.fileManager === 'string' ? cfg.settings.fileManager.trim() : '';
+        if (custom) setFileManagerLabel(custom);
+        else setFileManagerLabel(cfg.platform === 'win32' ? '文件管理器' : 'Finder');
+      })
+      .catch(() => {});
     await loadSessions();
   }
 
@@ -348,32 +472,28 @@ export default function App() {
   async function handleArchive(encoded: string, e?: React.MouseEvent) {
     e?.stopPropagation();
     await archiveProject(encoded);
-    const providerParam = selectedProviders.length === 1 ? { provider: selectedProviders[0] } : undefined;
-    const projData = await fetchProjects(providerParam);
+    const projData = await fetchProjects();
     setProjects(projData.projects ?? []);
   }
 
   async function handleUnarchive(encoded: string, e?: React.MouseEvent) {
     e?.stopPropagation();
     await unarchiveProject(encoded);
-    const providerParam = selectedProviders.length === 1 ? { provider: selectedProviders[0] } : undefined;
-    const projData = await fetchProjects(providerParam);
+    const projData = await fetchProjects();
     setProjects(projData.projects ?? []);
   }
 
   async function handlePin(encoded: string, e?: React.MouseEvent) {
     e?.stopPropagation();
     await pinProject(encoded);
-    const providerParam = selectedProviders.length === 1 ? { provider: selectedProviders[0] } : undefined;
-    const projData = await fetchProjects(providerParam);
+    const projData = await fetchProjects();
     setProjects(projData.projects ?? []);
   }
 
   async function handleUnpin(encoded: string, e?: React.MouseEvent) {
     e?.stopPropagation();
     await unpinProject(encoded);
-    const providerParam = selectedProviders.length === 1 ? { provider: selectedProviders[0] } : undefined;
-    const projData = await fetchProjects(providerParam);
+    const projData = await fetchProjects();
     setProjects(projData.projects ?? []);
   }
 
@@ -389,14 +509,25 @@ export default function App() {
 
   async function openProjectDetail(encoded: string, e?: React.MouseEvent) {
     e?.stopPropagation();
-    const data = await fetchProjectDetail(encoded);
-    setProjectDetail(data);
-    setOverlayTab('detail');
+    // Project identity == decoded path; select it and open the right panel.
+    selectProject(encoded);
+    setRightPanelOpen(true);
   }
 
-  async function handleNewTask(provider: CliProvider = 'claude-code') {
+  // Load project detail whenever the right panel targets a (new) project.
+  useEffect(() => {
+    if (!rightPanelOpen || !selectedProject) return;
+    if (projectDetail && projectDetail.encoded === selectedProject) return;
+    let cancelled = false;
+    fetchProjectDetail(selectedProject)
+      .then(data => { if (!cancelled) setProjectDetail(data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [rightPanelOpen, selectedProject]);
+
+  async function handleNewTask(agentId?: string) {
     if (!selectedProject) return;
-    const result = await createNewSession(selectedProject, provider);
+    const result = await createNewSession(selectedProject, undefined, undefined, agentId);
     if (result.action === 'error') {
       alert(result.message ?? '启动失败');
     }
@@ -413,7 +544,7 @@ export default function App() {
           ...(selectedProject ? { project: selectedProject } : {}),
           limit: '200',
         }),
-        fetchProjects(providerParam),
+        fetchProjects(),
       ]);
       setSessions(sessData.sessions ?? []);
       setProjects(projData.projects ?? []);
@@ -422,6 +553,24 @@ export default function App() {
       setRefreshing(false);
     }
   }
+
+  const handleProjectPanelResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setResizing(true);
+    const startX = e.clientX;
+    const startWidth = projectPanelWidth;
+
+    const onMove = (ev: MouseEvent) => {
+      setProjectPanelWidth(Math.max(280, Math.min(Math.round(window.innerWidth * 0.8), startWidth + (startX - ev.clientX))));
+    };
+    const onUp = () => {
+      setResizing(false);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [projectPanelWidth]);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -470,6 +619,63 @@ export default function App() {
 
   // Sessions bound to any issue are rendered as badges on the issue card, not as standalone cards.
   const boundSessionIds = useMemo(() => new Set(issues.flatMap(i => i.sessionIds)), [issues]);
+  const sessionIssueMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const i of issues) for (const sid of i.sessionIds) m.set(sid, i.identifier);
+    return m;
+  }, [issues]);
+  const issueById = useMemo(() => new Map(issues.map(i => [i.id, i])), [issues]);
+
+  // A session's board column: its bound task's status; unbound sessions fall
+  // back to their own (legacy task-store) status mapping — i.e. the virtual task.
+  const sessionColumn = useCallback((s: SessionItem): IssueStatus => {
+    const bound = issues.find(i => i.sessionIds.includes(s.sessionId));
+    if (bound) return bound.status;
+    return sessionStatusToColumn(s.status ?? 'backlog');
+  }, [issues]);
+
+  const filteredIssues = useMemo(() => {
+    let list = issues;
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter(i =>
+        i.title.toLowerCase().includes(q)
+        || i.identifier.toLowerCase().includes(q)
+        || (i.description ?? '').toLowerCase().includes(q)
+      );
+    }
+    // 工具筛选：任务按绑定会话的 provider 归属；无绑定会话的任务始终显示
+    if (selectedProviders.length > 0) {
+      const sessionProvider = new Map(sessions.map(s => [s.sessionId, s.provider]));
+      list = list.filter(i =>
+        i.sessionIds.length === 0
+        || i.sessionIds.some(sid => {
+          const p = sessionProvider.get(sid);
+          return p && selectedProviders.includes(p);
+        })
+      );
+    }
+    if (sortMode === 'time-asc') list = [...list].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+    else if (sortMode === 'messages') list = [...list].sort((a, b) => (b.commentCount ?? 0) - (a.commentCount ?? 0));
+    else list = [...list].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return list;
+  }, [issues, searchQuery, selectedProviders, sessions, sortMode]);
+
+  // Providers available in the current scope: the selected project's providers,
+  // or all installed providers when no project is selected.
+  const scopeProviders = useMemo(() => {
+    if (!selectedProject) return providers;
+    const proj = projects.find(p => p.decoded === selectedProject);
+    if (!proj) return providers;
+    return providers.filter(p => proj.providers.includes(p.id));
+  }, [providers, projects, selectedProject]);
+
+  // New-session dropdown: profiles whose provider exists in the current scope
+  // (project providers when a project is selected, otherwise installed providers).
+  const sessionAgents = useMemo(
+    () => agents.filter(a => scopeProviders.some(p => p.id === a.provider)),
+    [agents, scopeProviders],
+  );
 
   const filteredSessions = searchQuery
     ? sessions.filter(s =>
@@ -489,71 +695,67 @@ export default function App() {
         </div>
 
         <nav className="sidebar-nav">
-          <button className={`nav-item ${appMode === 'task' ? 'active' : ''}`} onClick={() => setAppMode('task')}>
+          <button className={`nav-item ${appMode === 'ideas' ? 'active' : ''}`} onClick={() => setAppMode('ideas')}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            <span>想法</span>
+          </button>
+          <button className={`nav-item ${appMode === 'task' ? 'active' : ''}`} onClick={() => setAppMode('task')}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
             <span>任务</span>
           </button>
-          <button className={`nav-item ${appMode === 'config' ? 'active' : ''}`} onClick={() => setAppMode('config')}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            <span>Harness</span>
+          <div className="nav-item nav-group" onClick={() => { setAppMode('inspiration'); setCollapsedNav(s => { const n = new Set(s); n.delete('inspiration'); return n; }); }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z"/></svg>
+            <span className={appMode === 'inspiration' ? 'nav-group-active-text' : ''}>灵感</span>
+            <button
+              className="nav-group-chevron"
+              title={(collapsedNav.has('inspiration') && appMode !== 'inspiration') ? '展开' : '收起'}
+              onClick={e => {
+                e.stopPropagation();
+                setCollapsedNav(s => {
+                  const n = new Set(s);
+                  if (n.has('inspiration') && appMode !== 'inspiration') n.delete('inspiration'); else n.add('inspiration');
+                  return n;
+                });
+              }}
+            >
+              <svg className={(collapsedNav.has('inspiration') && appMode !== 'inspiration') ? 'collapsed' : ''} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+          </div>
+          {!(collapsedNav.has('inspiration') && appMode !== 'inspiration') && (
+          <button className={`nav-item nav-subitem ${appMode === 'inspiration' ? 'active' : ''}`} onClick={() => setAppMode('inspiration')}>
+            <span>个人微信看板</span>
           </button>
+          )}
+          <div className="nav-item nav-group" onClick={() => { setAppMode('config'); setCollapsedNav(s => { const n = new Set(s); n.delete('config'); return n; }); }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span className={appMode === 'config' || appMode === 'system' ? 'nav-group-active-text' : ''}>管理库</span>
+            <button
+              className="nav-group-chevron"
+              title={(collapsedNav.has('config') && appMode !== 'config' && appMode !== 'system') ? '展开' : '收起'}
+              onClick={e => {
+                e.stopPropagation();
+                setCollapsedNav(s => {
+                  const n = new Set(s);
+                  if (n.has('config') && appMode !== 'config' && appMode !== 'system') n.delete('config'); else n.add('config');
+                  return n;
+                });
+              }}
+            >
+              <svg className={(collapsedNav.has('config') && appMode !== 'config' && appMode !== 'system') ? 'collapsed' : ''} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+          </div>
+          {!(collapsedNav.has('config') && appMode !== 'config' && appMode !== 'system') && (
+          <>
+          <button className={`nav-item nav-subitem ${appMode === 'config' ? 'active' : ''}`} onClick={() => setAppMode('config')}>
+            <span>技能·权限·连接器</span>
+          </button>
+          <button className={`nav-item nav-subitem ${appMode === 'system' ? 'active' : ''}`} onClick={() => setAppMode('system')}>
+            <span>系统配置</span>
+          </button>
+          </>
+          )}
         </nav>
 
-        {providers.length > 1 && (
-          <div className="provider-dropdown-wrapper">
-            <button
-              className="provider-dropdown-trigger"
-              onClick={() => setProviderDropdownOpen(o => !o)}
-            >
-              {selectedProviders.length === 0 ? (
-                <span className="provider-trigger-text">全部工具</span>
-              ) : (
-                <span className="provider-trigger-chips">
-                  {selectedProviders.map(id => {
-                    const p = providers.find(x => x.id === id);
-                    return (
-                      <span key={id} className="provider-chip" style={{ background: PROVIDER_COLORS[id] }}>
-                        {p?.name || id}
-                      </span>
-                    );
-                  })}
-                </span>
-              )}
-              <svg className={`provider-dropdown-arrow ${providerDropdownOpen ? 'open' : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            {providerDropdownOpen && (
-              <>
-                <div className="provider-dropdown-backdrop" onClick={() => setProviderDropdownOpen(false)} />
-                <div className="provider-dropdown-menu">
-                  <label className="provider-dropdown-item" onClick={() => { setSelectedProviders([]); setSelectedProject(null); setProviderDropdownOpen(false); }}>
-                    <span className={`provider-check ${selectedProviders.length === 0 ? 'checked' : ''}`}>
-                      {selectedProviders.length === 0 && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
-                    </span>
-                    <span>全部工具</span>
-                  </label>
-                  {providers.map(p => {
-                    const checked = selectedProviders.includes(p.id);
-                    return (
-                      <label key={p.id} className="provider-dropdown-item" onClick={() => {
-                        const next = checked
-                          ? selectedProviders.filter(x => x !== p.id)
-                          : [...selectedProviders, p.id];
-                        setSelectedProviders(next);
-                        setSelectedProject(null);
-                      }}>
-                        <span className={`provider-check ${checked ? 'checked' : ''}`}>
-                          {checked && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
-                        </span>
-                        <span className="provider-dot" style={{ background: PROVIDER_COLORS[p.id] }} />
-                        <span>{p.name}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-        )}
 
         <div className="sidebar-section">
           <div className="section-header">
@@ -565,11 +767,44 @@ export default function App() {
           <div className="project-list">
             <div
               className={`project-item ${!selectedProject ? 'active' : ''}`}
-              onClick={() => setSelectedProject(null)}
+              onClick={() => selectProject(null)}
             >
               <span className="project-name">全部项目</span>
               <span className="project-count">{sessions.length}</span>
             </div>
+            <div className="project-search-box">
+              <input
+                className="project-search-input"
+                placeholder="搜索项目…"
+                value={projectSearch}
+                onChange={e => setProjectSearch(e.target.value)}
+              />
+              {projectSearch && (
+                <button className="project-search-clear" onClick={() => setProjectSearch('')} title="清除">✕</button>
+              )}
+            </div>
+            {projectSearch.trim() ? (
+              <>
+                {getSortedProjects().filter(p => fuzzyMatch(projectSearch.trim(), p.decoded)).length === 0 && (
+                  <div className="issue-empty-hint project-search-empty">无匹配项目</div>
+                )}
+                {getSortedProjects().filter(p => fuzzyMatch(projectSearch.trim(), p.decoded)).map(p => (
+                  <div
+                    key={p.encoded}
+                    className={`project-item ${p.archived ? 'archived' : ''} ${selectedProject === p.decoded ? 'active' : ''}`}
+                    onClick={() => selectProject(p.decoded)}
+                    onContextMenu={(e) => handleProjectContextMenu(p, e)}
+                    title={p.decoded}
+                  >
+                    <span className="project-name">{p.decoded.split('/').slice(-2).join('/')}</span>
+                    {!!p.archived && <span className="project-archived-badge">归档</span>}
+                    <span className="project-count">{p.sessionCount}</span>
+                    <button className="project-more-btn" onClick={(e) => { e.stopPropagation(); handleProjectContextMenu(p, e); }} title="更多操作">···</button>
+                  </div>
+                ))}
+              </>
+            ) : (
+            <>
             {getSortedProjects().filter(p => p.pinned && !p.archived).length > 0 && (
               <>
                 <div className="section-divider">
@@ -579,7 +814,7 @@ export default function App() {
                   <div
                     key={p.encoded}
                     className={`project-item ${selectedProject === p.decoded ? 'active' : ''}`}
-                    onClick={() => setSelectedProject(p.decoded)}
+                    onClick={() => selectProject(p.decoded)}
                     onContextMenu={(e) => handleProjectContextMenu(p, e)}
                   >
                     <span className="project-name">{p.decoded.split('/').slice(-2).join('/')}</span>
@@ -589,47 +824,73 @@ export default function App() {
                 ))}
               </>
             )}
-            {getSortedProjects().filter(p => !p.pinned && !p.archived).length > 0 && (
-              <>
-                {getSortedProjects().filter(p => p.pinned && !p.archived).length > 0 && (
-                  <div className="section-divider">
-                    <span>全部</span>
+            {(() => {
+              const allProjects = getSortedProjects().filter(p => !p.pinned && !p.archived);
+              if (allProjects.length === 0) return null;
+              const visible = allProjects.slice(0, allLimit);
+              const hiddenCount = allProjects.length - visible.length;
+              return (
+                <>
+                  {getSortedProjects().filter(p => p.pinned && !p.archived).length > 0 && (
+                    <div className="section-divider">
+                      <span>全部</span>
+                    </div>
+                  )}
+                  {visible.map(p => (
+                    <div
+                      key={p.encoded}
+                      className={`project-item ${selectedProject === p.decoded ? 'active' : ''}`}
+                      onClick={() => selectProject(p.decoded)}
+                      onContextMenu={(e) => handleProjectContextMenu(p, e)}
+                    >
+                      <span className="project-name">{p.decoded.split('/').slice(-2).join('/')}</span>
+                      <span className="project-count">{p.sessionCount}</span>
+                      <button className="project-more-btn" onClick={(e) => { e.stopPropagation(); handleProjectContextMenu(p, e); }} title="更多操作">···</button>
+                    </div>
+                  ))}
+                  {hiddenCount > 0 && (
+                    <button className="project-expand-btn" onClick={() => setAllLimit(l => l + 10)}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                      展开更多（还有 {hiddenCount} 个）
+                    </button>
+                  )}
+                </>
+              );
+            })()}
+            {(() => {
+              const archivedProjects = getSortedProjects().filter(p => p.archived);
+              if (archivedProjects.length === 0) return null;
+              const visible = archivedProjects.slice(0, archivedLimit);
+              const hiddenCount = archivedProjects.length - visible.length;
+              return (
+                <>
+                  <div className="archive-header" onClick={() => setArchivedCollapsed(!archivedCollapsed)}>
+                    <span className={`archive-toggle ${archivedCollapsed ? '' : 'open'}`}>▶</span>
+                    <span>归档</span>
+                    <span className="project-count">{archivedProjects.length}</span>
                   </div>
-                )}
-                {getSortedProjects().filter(p => !p.pinned && !p.archived).map(p => (
-                  <div
-                    key={p.encoded}
-                    className={`project-item ${selectedProject === p.decoded ? 'active' : ''}`}
-                    onClick={() => setSelectedProject(p.decoded)}
-                    onContextMenu={(e) => handleProjectContextMenu(p, e)}
-                  >
-                    <span className="project-name">{p.decoded.split('/').slice(-2).join('/')}</span>
-                    <span className="project-count">{p.sessionCount}</span>
-                    <button className="project-more-btn" onClick={(e) => { e.stopPropagation(); handleProjectContextMenu(p, e); }} title="更多操作">···</button>
-                  </div>
-                ))}
-              </>
-            )}
-            {getSortedProjects().filter(p => p.archived).length > 0 && (
-              <>
-                <div className="archive-header" onClick={() => setArchivedCollapsed(!archivedCollapsed)}>
-                  <span className={`archive-toggle ${archivedCollapsed ? '' : 'open'}`}>▶</span>
-                  <span>归档</span>
-                  <span className="project-count">{getSortedProjects().filter(p => p.archived).length}</span>
-                </div>
-                {!archivedCollapsed && getSortedProjects().filter(p => p.archived).map(p => (
-                  <div
-                    key={p.encoded}
-                    className={`project-item archived ${selectedProject === p.decoded ? 'active' : ''}`}
-                    onClick={() => setSelectedProject(p.decoded)}
-                    onContextMenu={(e) => handleProjectContextMenu(p, e)}
-                  >
-                    <span className="project-name">{p.decoded.split('/').slice(-2).join('/')}</span>
-                    <span className="project-count">{p.sessionCount}</span>
-                    <button className="project-more-btn" onClick={(e) => { e.stopPropagation(); handleProjectContextMenu(p, e); }} title="更多操作">···</button>
-                  </div>
-                ))}
-              </>
+                  {!archivedCollapsed && visible.map(p => (
+                    <div
+                      key={p.encoded}
+                      className={`project-item archived ${selectedProject === p.decoded ? 'active' : ''}`}
+                      onClick={() => selectProject(p.decoded)}
+                      onContextMenu={(e) => handleProjectContextMenu(p, e)}
+                    >
+                      <span className="project-name">{p.decoded.split('/').slice(-2).join('/')}</span>
+                      <span className="project-count">{p.sessionCount}</span>
+                      <button className="project-more-btn" onClick={(e) => { e.stopPropagation(); handleProjectContextMenu(p, e); }} title="更多操作">···</button>
+                    </div>
+                  ))}
+                  {!archivedCollapsed && hiddenCount > 0 && (
+                    <button className="project-expand-btn" onClick={() => setArchivedLimit(l => l + 10)}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                      展开更多（还有 {hiddenCount} 个）
+                    </button>
+                  )}
+                </>
+              );
+            })()}
+            </>
             )}
           </div>
         </div>
@@ -652,6 +913,30 @@ export default function App() {
           providers={providers}
           onToggleSidebar={() => setSidebarOpen(o => !o)}
         />
+      ) : appMode === 'system' ? (
+        <SystemConfigView onToggleSidebar={() => setSidebarOpen(o => !o)} />
+      ) : appMode === 'inspiration' ? (
+        <WeChatView onToggleSidebar={() => setSidebarOpen(o => !o)} />
+      ) : appMode === 'ideas' ? (
+        <main className="main-content">
+          <header className="toolbar">
+            <div className="toolbar-left">
+              <button className="hamburger-btn" onClick={() => setSidebarOpen(o => !o)} title="菜单">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+              </button>
+              <h2 className="page-title">想法</h2>
+            </div>
+          </header>
+          <IdeasView projectPaths={projects.map(p => p.decoded)} onPromoted={() => { void loadIssues(); }} onOpenIssue={(identifier, project) => {
+            pendingIssueRef.current = identifier;
+            setAppMode('task');
+            setTaskTab('issues');
+            if (project && project !== selectedProject) setSelectedProject(project);
+            // Same project: issues won't reload, select immediately.
+            const hit = issues.find(i => i.identifier === identifier);
+            if (hit && (!project || project === selectedProject)) { pendingIssueRef.current = null; setSelectedIssueId(hit.id); }
+          }} />
+        </main>
       ) : (
       <>
       {/* 主内容区 */}
@@ -661,27 +946,31 @@ export default function App() {
             <button className="hamburger-btn" onClick={() => setSidebarOpen(o => !o)} title="菜单">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
             </button>
-            <h2 className="page-title">
-              {selectedProject ? selectedProject.split('/').slice(-2).join('/') : '全部任务'}
-            </h2>
-            <span className="task-count">{filteredSessions.length}</span>
-            {selectedProject && (
+            <div className="task-tabs">
+              <button className={`task-tab ${taskTab === 'issues' ? 'active' : ''}`} onClick={() => setTaskTab('issues')}>
+                任务 <span className="task-count">{issues.filter(i => !i.archivedAt).length}</span>
+              </button>
+              <button className={`task-tab ${taskTab === 'sessions' ? 'active' : ''}`} onClick={() => setTaskTab('sessions')}>
+                会话 <span className="task-count">{filteredSessions.length}</span>
+              </button>
+            </div>
+            {taskTab === 'sessions' && selectedProject && (
               <div className="new-task-split">
-                <button className="new-task-btn" onClick={() => handleNewTask('claude-code')} title="新建任务 (Claude Code)">
+                <button className="new-task-btn" onClick={() => handleNewTask(sessionAgents.find(a => a.builtin && a.provider === 'claude-code')?.id ?? sessionAgents[0]?.id)} title={sessionAgents[0] ? `新建会话（${sessionAgents.find(a => a.builtin && a.provider === 'claude-code')?.name ?? sessionAgents[0].name}）` : '新建会话'}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-                  新建任务
+                  新建会话
                 </button>
-                <button className="new-task-arrow" onClick={() => setNewTaskDropdownOpen(o => !o)} title="选择 CLI 工具">
+                <button className="new-task-arrow" onClick={() => setNewTaskDropdownOpen(o => !o)} title="选择 Agent">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
                 {newTaskDropdownOpen && (
                   <>
                     <div className="new-task-backdrop" onClick={() => setNewTaskDropdownOpen(false)} />
                     <div className="new-task-menu">
-                      {providers.map(p => (
-                        <div key={p.id} className="new-task-menu-item" onClick={() => { handleNewTask(p.id); setNewTaskDropdownOpen(false); }}>
-                          <span className="provider-dot" style={{ background: PROVIDER_COLORS[p.id] }} />
-                          {p.name}
+                      {sessionAgents.map(a => (
+                        <div key={a.id} className="new-task-menu-item" onClick={() => { handleNewTask(a.id); setNewTaskDropdownOpen(false); }}>
+                          <span className="provider-dot" style={{ background: PROVIDER_COLORS[a.provider] }} />
+                          {a.name}
                         </div>
                       ))}
                     </div>
@@ -689,60 +978,121 @@ export default function App() {
                 )}
               </div>
             )}
-            <button className="new-issue-btn" onClick={() => { setNewIssueInitialStatus(undefined); setShowNewIssue(true); }} title="新建 Issue">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-              新建 Issue
-            </button>
+            {taskTab === 'issues' && (
+              <button className="new-issue-btn" onClick={() => { setNewIssueInitialStatus(undefined); setShowNewIssue(true); }} title="新建任务">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                新建任务
+              </button>
+            )}
           </div>
           <div className="toolbar-right">
+            {providers.length > 1 && (
+              <div className="provider-dropdown-wrapper">
+                <button
+                  className="provider-dropdown-trigger"
+                  onClick={() => setProviderDropdownOpen(o => !o)}
+                >
+                  {selectedProviders.length === 0 ? (
+                    <span className="provider-trigger-text">全部工具</span>
+                  ) : (
+                    <span className="provider-trigger-chips">
+                      {selectedProviders.map(id => {
+                        const p = providers.find(x => x.id === id);
+                        return (
+                          <span key={id} className="provider-chip" style={{ background: PROVIDER_COLORS[id] }}>
+                            {p?.name || id}
+                          </span>
+                        );
+                      })}
+                    </span>
+                  )}
+                  <svg className={`provider-dropdown-arrow ${providerDropdownOpen ? 'open' : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                {providerDropdownOpen && (
+                  <>
+                    <div className="provider-dropdown-backdrop" onClick={() => setProviderDropdownOpen(false)} />
+                    <div className="provider-dropdown-menu">
+                      <label className="provider-dropdown-item" onClick={() => { setSelectedProviders([]); setProviderDropdownOpen(false); }}>
+                        <span className={`provider-check ${selectedProviders.length === 0 ? 'checked' : ''}`}>
+                          {selectedProviders.length === 0 && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                        </span>
+                        <span>全部工具</span>
+                      </label>
+                      {scopeProviders.map(p => {
+                        const checked = selectedProviders.includes(p.id);
+                        return (
+                          <label key={p.id} className="provider-dropdown-item" onClick={() => {
+                            const next = checked
+                              ? selectedProviders.filter(x => x !== p.id)
+                              : [...selectedProviders, p.id];
+                            setSelectedProviders(next);
+                          }}>
+                            <span className={`provider-check ${checked ? 'checked' : ''}`}>
+                              {checked && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                            </span>
+                            <span className="provider-dot" style={{ background: PROVIDER_COLORS[p.id] }} />
+                            <span>{p.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             <button className={`refresh-btn ${refreshing ? 'spinning' : ''}`} onClick={handleRefresh} disabled={refreshing} title="刷新数据">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
             </button>
             <div className="search-box">
               <svg className="search-icon" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd"/></svg>
-              <input type="text" placeholder="搜索任务..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+              <input type="text" placeholder={taskTab === 'issues' ? '搜索任务...' : '搜索会话...'} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
             </div>
-            <select className="sort-select" value={sortMode} onChange={e => setSortMode(e.target.value as SortMode)}>
-              <option value="time-desc">最近更新</option>
-              <option value="time-asc">最早更新</option>
-              <option value="messages">消息最多</option>
-            </select>
-            {(sortMode === 'time-desc' || sortMode === 'time-asc') && viewMode === 'board' && (
-              <button
-                className={`group-toggle ${groupByDate ? 'active' : ''}`}
-                onClick={() => setGroupByDate(g => !g)}
-                title="按日期分组"
-              >
-                <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"/></svg>
-              </button>
-            )}
-            <div className="view-toggle">
-              <button className={`view-btn ${viewMode === 'board' ? 'active' : ''}`} onClick={() => setViewMode('board')} title="看板视图">
-                <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path d="M2 4a1 1 0 011-1h4a1 1 0 011 1v12a1 1 0 01-1 1H3a1 1 0 01-1-1V4zm6 0a1 1 0 011-1h4a1 1 0 011 1v12a1 1 0 01-1 1H9a1 1 0 01-1-1V4zm7-1a1 1 0 00-1 1v12a1 1 0 001 1h4a1 1 0 001-1V4a1 1 0 00-1-1h-4z"/></svg>
-              </button>
-              <button className={`view-btn ${viewMode === 'card' ? 'active' : ''}`} onClick={() => setViewMode('card')} title="卡片视图">
-                <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
-              </button>
-              <button className={`view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')} title="列表视图">
-                <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd"/></svg>
-              </button>
-            </div>
+<>
+              <select className="sort-select" value={sortMode} onChange={e => setSortMode(e.target.value as SortMode)}>
+                <option value="time-desc">最近更新</option>
+                <option value="time-asc">最早更新</option>
+                <option value="messages">{taskTab === 'issues' ? '评论最多' : '消息最多'}</option>
+              </select>
+              {(sortMode === 'time-desc' || sortMode === 'time-asc') && (
+                <button
+                  className={`group-toggle ${groupByDate ? 'active' : ''}`}
+                  onClick={() => setGroupByDate(g => !g)}
+                  title="按日期分组"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"/></svg>
+                </button>
+              )}
+              <div className="view-toggle">
+                <button className={`view-btn ${viewMode === 'board' ? 'active' : ''}`} onClick={() => setViewMode('board')} title="看板视图">
+                  <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path d="M2 4a1 1 0 011-1h4a1 1 0 011 1v12a1 1 0 01-1 1H3a1 1 0 01-1-1V4zm6 0a1 1 0 011-1h4a1 1 0 011 1v12a1 1 0 01-1 1H9a1 1 0 01-1-1V4zm7-1a1 1 0 00-1 1v12a1 1 0 001 1h4a1 1 0 001-1V4a1 1 0 00-1-1h-4z"/></svg>
+                </button>
+                <button className={`view-btn ${viewMode === 'card' ? 'active' : ''}`} onClick={() => setViewMode('card')} title="卡片视图">
+                  <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 002 2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                </button>
+                <button className={`view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')} title="列表视图">
+                  <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd"/></svg>
+                </button>
+              </div>
+            </>
+            <button
+              className={`view-btn ${rightPanelOpen ? 'active' : ''}`}
+              onClick={() => setRightPanelOpen(o => !o)}
+              title={rightPanelOpen ? '关闭右侧栏' : '打开右侧栏'}
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fillRule="evenodd" d="M2 4a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V4zm11 0v12h3a1 1 0 001-1V5a1 1 0 00-1-1h-3z" clipRule="evenodd"/></svg>
+            </button>
           </div>
         </header>
 
         {loading ? (
           <div className="loading">加载中...</div>
-        ) : viewMode === 'board' ? (
+        ) : taskTab === 'issues' ? (
+          viewMode === 'board' ? (
           <div className="board">
             {ISSUE_COLUMNS.map(col => {
-              const colIssues = issues
+              const colIssues = filteredIssues
                 .filter(i => i.status === col.key)
                 .sort((a, b) => a.sortOrder - b.sortOrder);
-              const colSessions = filteredSessions.filter(s =>
-                !boundSessionIds.has(s.sessionId) && sessionStatusToColumn(s.status ?? 'backlog') === col.key
-              );
-              const dateGroupActive = groupByDate && (sortMode === 'time-desc' || sortMode === 'time-asc');
-              const dateGroups = dateGroupActive ? groupSessionsByDate(colSessions) : null;
               return (
                 <div
                   key={col.key}
@@ -762,7 +1112,7 @@ export default function App() {
                     status={col.key}
                     label={col.label}
                     color={col.color}
-                    count={colIssues.length + colSessions.length}
+                    count={colIssues.length}
                     onAdd={() => { setNewIssueInitialStatus(col.key); setShowNewIssue(true); }}
                   />
                   <div className="column-cards">
@@ -778,6 +1128,61 @@ export default function App() {
                         onDragEnd={() => { dragIssueRef.current = null; setDraggingIssueId(null); setDropTarget(null); }}
                       />
                     ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          ) : viewMode === 'card' ? (
+            <div className="card-grid">
+              {(groupByDate && (sortMode === 'time-desc' || sortMode === 'time-asc')
+                ? groupIssuesByDate(filteredIssues)
+                : [{ label: '', issues: filteredIssues }]
+              ).map(group => (
+                <div key={group.label || 'all'} className="card-grid-group">
+                  {group.label && <div className="date-group-label">{group.label}（{group.issues.length}）</div>}
+                  <div className="card-grid">
+                    {group.issues.map(issue => (
+                      <IssueCard
+                        key={issue.id}
+                        issue={issue}
+                        sessions={sessions}
+                        isSelected={selectedIssueId === issue.id}
+                        isDragging={false}
+                        onClick={() => selectIssue(issue)}
+                        onDragStart={() => {}}
+                        onDragEnd={() => {}}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="list-view">
+              {filteredIssues.map(issue => (
+                <IssueListItem
+                  key={issue.id}
+                  issue={issue}
+                  isSelected={selectedIssueId === issue.id}
+                  onClick={() => selectIssue(issue)}
+                />
+              ))}
+            </div>
+          )
+        ) : viewMode === 'board' ? (
+          <div className="board">
+            {ISSUE_COLUMNS.map(col => {
+              const colSessions = filteredSessions.filter(s => sessionColumn(s) === col.key);
+              const dateGroupActive = groupByDate && (sortMode === 'time-desc' || sortMode === 'time-asc');
+              const dateGroups = dateGroupActive ? groupSessionsByDate(colSessions) : null;
+              return (
+                <div key={col.key} className="board-column">
+                  <div className="board-column-header-simple" style={{ borderTopColor: col.color }}>
+                    <span>{col.label}</span>
+                    <span className="task-count">{colSessions.length}</span>
+                  </div>
+                  <div className="column-cards">
                     {dateGroups ? dateGroups.map(group => (
                       <DateGroupSection key={group.label} label={group.label} count={group.sessions.length}>
                         {group.sessions.map(s => (
@@ -788,6 +1193,7 @@ export default function App() {
                             onClick={() => selectSession(s)}
                             onHover={(e) => setTooltip({ session: s, x: e.clientX, y: e.clientY })}
                             onLeave={() => setTooltip(null)}
+                            boundLabel={sessionIssueMap.get(s.sessionId)}
                           />
                         ))}
                       </DateGroupSection>
@@ -799,6 +1205,7 @@ export default function App() {
                         onClick={() => selectSession(s)}
                         onHover={(e) => setTooltip({ session: s, x: e.clientX, y: e.clientY })}
                         onLeave={() => setTooltip(null)}
+                        boundLabel={sessionIssueMap.get(s.sessionId)}
                       />
                     ))}
                   </div>
@@ -816,6 +1223,7 @@ export default function App() {
                 onClick={() => selectSession(s)}
                 onHover={(e) => setTooltip({ session: s, x: e.clientX, y: e.clientY })}
                 onLeave={() => setTooltip(null)}
+                boundLabel={sessionIssueMap.get(s.sessionId)}
               />
             ))}
           </div>
@@ -835,7 +1243,11 @@ export default function App() {
 
       {/* 右侧详情面板（session 与 issue 互斥，共用可拖拽宽度） */}
       {(selectedSession || selectedIssueId) && (
-        <div className="resize-handle" onMouseDown={handleResizeStart}></div>
+        <div
+          className="resize-handle detail-resize-handle"
+          style={{ right: detailWidth }}
+          onMouseDown={handleResizeStart}
+        ></div>
       )}
       {selectedSession && (
           <aside className="detail-panel" style={{ width: detailWidth }}>
@@ -852,6 +1264,39 @@ export default function App() {
                 <button className="close-btn" onClick={closeDetail}>✕</button>
               </div>
             </div>
+
+            {/* 归属任务块：已绑定显示真实任务（可跳转）；未绑定按规则虚拟（会话标题即任务名，不落库） */}
+            {(() => {
+              const boundIssue = issues.find(i => i.sessionIds.includes(selectedSession.sessionId));
+              if (boundIssue) {
+                const col = ISSUE_COLUMNS.find(c => c.key === boundIssue.status);
+                return (
+                  <div className="session-task-block">
+                    <div className="session-task-label">归属任务</div>
+                    <div className="session-task-row">
+                      <span className="issue-list-id">{boundIssue.identifier}</span>
+                      <span className="session-task-title">{boundIssue.title}</span>
+                      <span className="issue-list-status" style={{ color: col?.color }}>{col?.label}</span>
+                      <button
+                        className="btn-sm"
+                        onClick={() => { setSelectedIssueId(boundIssue.id); setSelectedSession(null); setTaskTab('issues'); }}
+                      >查看任务</button>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div className="session-task-block virtual">
+                  <div className="session-task-label">归属任务</div>
+                  <div className="session-task-row">
+                    <span className="session-task-title">
+                      {selectedSession.label || selectedSession.firstUserMessage?.slice(0, 60) || selectedSession.sessionId.slice(0, 8)}
+                    </span>
+                    <span className="session-task-virtual-chip">未绑定 · 虚拟任务</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="detail-meta">
               <MetaItem label="项目" value={selectedSession.project?.split('/').slice(-2).join('/')} />
@@ -892,6 +1337,90 @@ export default function App() {
         </aside>
       )}
 
+      {/* 最右侧：项目面板（详情 + 文件目录），跟随当前选中项目 */}
+      {rightPanelOpen && appMode === 'task' && (
+        <div
+          className="resize-handle project-panel-resize-handle"
+          style={{ right: projectPanelWidth }}
+          onMouseDown={handleProjectPanelResizeStart}
+        ></div>
+      )}
+      {rightPanelOpen && appMode === 'task' && (
+        <aside className="project-panel" style={{ width: projectPanelWidth }}>
+          <div className="detail-header">
+            <div className="detail-title-area">
+              <h3 className="detail-title">
+                {selectedProject ? selectedProject.split('/').slice(-2).join('/') : '项目详情'}
+              </h3>
+            </div>
+            <div className="detail-actions">
+              <button className="close-btn" onClick={() => setRightPanelOpen(false)}>✕</button>
+            </div>
+          </div>
+          {!selectedProject ? (
+            <div className="loading-small">在左侧选择一个项目查看详情</div>
+          ) : !projectDetail || projectDetail.encoded !== selectedProject ? (
+            <div className="loading-small">加载中...</div>
+          ) : (
+            <>
+              <div className="project-panel-tabs">
+                <button className={`project-panel-tab ${overlayTab === 'detail' ? 'active' : ''}`} onClick={() => setOverlayTab('detail')}>详情</button>
+                <button className={`project-panel-tab ${overlayTab === 'files' ? 'active' : ''}`} onClick={() => setOverlayTab('files')}>文件</button>
+              </div>
+              {overlayTab === 'detail' ? (
+                <div className="overlay-body project-panel-body">
+                  <MetaItem label="路径" value={projectDetail.diskPath} />
+                  <MetaItem label="状态" value={projectDetail.pathExists ? '路径存在' : '路径不存在'} />
+                  {projectDetail.gitRemoteUrl && <MetaItem label="Git Remote" value={projectDetail.gitRemoteUrl} />}
+                  {projectDetail.gitBranch && <MetaItem label="当前分支" value={projectDetail.gitBranch} />}
+                  {projectDetail.gitStatus !== undefined && (
+                    <div className="meta-row">
+                      <span className="meta-label">Git 状态</span>
+                      <span className="meta-value meta-pre">{projectDetail.gitStatus || '(clean)'}</span>
+                    </div>
+                  )}
+                  {projectDetail.nodeVersion && <MetaItem label="Node" value={projectDetail.nodeVersion} />}
+                  {projectDetail.packageManager && <MetaItem label="包管理器" value={projectDetail.packageManager} />}
+                  <MetaItem label="会话数" value={String(projectDetail.sessionCount)} />
+                  {projectDetail.lastTimestamp && <MetaItem label="最近活跃" value={new Date(projectDetail.lastTimestamp).toLocaleString('zh-CN')} />}
+
+                  <div className="overlay-actions">
+                    <button className="overlay-action-btn" onClick={() => handleOpenFinder(projectDetail.encoded)}>
+                      <IconFolder /> 在{fileManagerLabel}中打开
+                    </button>
+                    <button className="overlay-action-btn" onClick={() => handleOpenTerminal(projectDetail.encoded)}>
+                      <IconTerminal /> 打开终端
+                    </button>
+                    {projects.find(p => p.encoded === projectDetail.encoded)?.pinned ? (
+                      <button className="overlay-action-btn" onClick={() => handleUnpin(projectDetail.encoded)}>
+                        <IconPinOff /> 取消置顶
+                      </button>
+                    ) : (
+                      <button className="overlay-action-btn" onClick={() => handlePin(projectDetail.encoded)}>
+                        <IconPin /> 置顶
+                      </button>
+                    )}
+                    {projects.find(p => p.encoded === projectDetail.encoded)?.archived ? (
+                      <button className="overlay-action-btn" onClick={() => handleUnarchive(projectDetail.encoded)}>
+                        <IconArchiveRestore /> 取消归档
+                      </button>
+                    ) : (
+                      <button className="overlay-action-btn" onClick={() => handleArchive(projectDetail.encoded)}>
+                        <IconArchive /> 归档
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="project-panel-files">
+                  <FileBrowser encoded={projectDetail.encoded} />
+                </div>
+              )}
+            </>
+          )}
+        </aside>
+      )}
+
       {/* Tooltip */}
       {tooltip && (
         <div className="tooltip" style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}>
@@ -907,7 +1436,8 @@ export default function App() {
       {/* New Issue Modal */}
       {showNewIssue && (
         <NewIssueModal
-          projectEncoded={selectedProject ? selectedProject.replace(/\//g, '-') : undefined}
+          projectEncoded={selectedProject ?? undefined}
+          projectPaths={projects.map(p => p.decoded)}
           initialStatus={newIssueInitialStatus}
           onClose={() => setShowNewIssue(false)}
           onCreated={(issue) => {
@@ -918,74 +1448,12 @@ export default function App() {
       )}
 
       {/* Project Detail Overlay */}
-      {projectDetail && (
-        <div className="overlay-backdrop" onClick={() => { setProjectDetail(null); setOverlayTab('detail'); }}>
-          <div className={`overlay-panel ${overlayTab === 'files' ? 'overlay-panel-wide' : ''}`} onClick={e => e.stopPropagation()}>
-            <div className="overlay-header">
-              <h3>{projectDetail.decoded.split('/').slice(-2).join('/')}</h3>
-              <div className="overlay-tabs">
-                <button className={`overlay-tab ${overlayTab === 'detail' ? 'active' : ''}`} onClick={() => setOverlayTab('detail')}>详情</button>
-                <button className={`overlay-tab ${overlayTab === 'files' ? 'active' : ''}`} onClick={() => setOverlayTab('files')}>文件</button>
-              </div>
-              <button className="close-btn" onClick={() => { setProjectDetail(null); setOverlayTab('detail'); }}>✕</button>
-            </div>
-            {overlayTab === 'detail' ? (
-            <div className="overlay-body">
-              <MetaItem label="路径" value={projectDetail.diskPath} />
-              <MetaItem label="状态" value={projectDetail.pathExists ? '路径存在' : '路径不存在'} />
-              {projectDetail.gitRemoteUrl && <MetaItem label="Git Remote" value={projectDetail.gitRemoteUrl} />}
-              {projectDetail.gitBranch && <MetaItem label="当前分支" value={projectDetail.gitBranch} />}
-              {projectDetail.gitStatus !== undefined && (
-                <div className="meta-row">
-                  <span className="meta-label">Git Status</span>
-                  <span className="meta-value meta-pre">{projectDetail.gitStatus || '(clean)'}</span>
-                </div>
-              )}
-              {projectDetail.nodeVersion && <MetaItem label="Node" value={projectDetail.nodeVersion} />}
-              {projectDetail.packageManager && <MetaItem label="包管理器" value={projectDetail.packageManager} />}
-              <MetaItem label="会话数" value={String(projectDetail.sessionCount)} />
-              {projectDetail.lastTimestamp && <MetaItem label="最近活跃" value={new Date(projectDetail.lastTimestamp).toLocaleString('zh-CN')} />}
-
-              <div className="overlay-actions">
-                <button className="overlay-action-btn" onClick={() => handleOpenFinder(projectDetail.encoded)}>
-                  <IconFolder /> 在 Finder 中打开
-                </button>
-                <button className="overlay-action-btn" onClick={() => handleOpenTerminal(projectDetail.encoded)}>
-                  <IconTerminal /> 在终端中打开
-                </button>
-                {projects.find(p => p.encoded === projectDetail.encoded)?.pinned ? (
-                  <button className="overlay-action-btn" onClick={() => handleUnpin(projectDetail.encoded)}>
-                    <IconPinOff /> 取消置顶
-                  </button>
-                ) : (
-                  <button className="overlay-action-btn" onClick={() => handlePin(projectDetail.encoded)}>
-                    <IconPin /> 置顶
-                  </button>
-                )}
-                {projects.find(p => p.encoded === projectDetail.encoded)?.archived ? (
-                  <button className="overlay-action-btn" onClick={() => handleUnarchive(projectDetail.encoded)}>
-                    <IconArchiveRestore /> 取消归档
-                  </button>
-                ) : (
-                  <button className="overlay-action-btn" onClick={() => handleArchive(projectDetail.encoded)}>
-                    <IconArchive /> 归档
-                  </button>
-                )}
-              </div>
-            </div>
-            ) : (
-            <FileBrowser encoded={projectDetail.encoded} />
-            )}
-          </div>
-        </div>
-      )}
-
       {contextMenu && (
         <>
           <div className="context-menu-backdrop" onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }} />
           <div className="context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
             <button className="context-menu-item" onClick={() => { handleOpenFinder(contextMenu.encoded); setContextMenu(null); }}>
-              <IconFolder /> 在 Finder 中打开
+              <IconFolder /> 在{fileManagerLabel}中打开
             </button>
             <button className="context-menu-item" onClick={() => { handleOpenTerminal(contextMenu.encoded); setContextMenu(null); }}>
               <IconTerminal /> 在终端中打开
@@ -1015,6 +1483,7 @@ export default function App() {
           </div>
         </>
       )}
+      <IdeaQuickCapture />
     </div>
   );
 }
@@ -1033,9 +1502,10 @@ function DateGroupSection({ label, count, children }: { label: string; count: nu
   );
 }
 
-function SessionCard({ session, isSelected, onClick, onHover, onLeave }: {
+function SessionCard({ session, isSelected, onClick, onHover, onLeave, boundLabel }: {
   session: SessionItem; isSelected: boolean; onClick: () => void;
   onHover: (e: React.MouseEvent) => void; onLeave: () => void;
+  boundLabel?: string;
 }) {
   const title = session.label || session.firstUserMessage?.slice(0, 60) || session.sessionId.slice(0, 8);
   const lastMsg = session.firstUserMessage?.slice(0, 100) || '';
@@ -1058,6 +1528,7 @@ function SessionCard({ session, isSelected, onClick, onHover, onLeave }: {
       <div className="card-footer">
         <span className="card-time">{timeAgo}</span>
         <span className="card-stats">💬 {session.userMessageCount + session.assistantMessageCount}</span>
+        {boundLabel && <span className="card-bound-issue" title="已绑定任务">{boundLabel}</span>}
         {session.gitBranch && <span className="card-branch">{session.gitBranch}</span>}
       </div>
     </div>
@@ -1137,6 +1608,45 @@ function getDateGroup(date: Date): string {
     return weekdays[date.getDay()];
   }
   return '更早';
+}
+
+function groupIssuesByDate(issues: IssueSummary[]): { label: string; issues: IssueSummary[] }[] {
+  const groups = new Map<string, IssueSummary[]>();
+  for (const i of issues) {
+    const label = i.updatedAt ? getDateGroup(new Date(i.updatedAt)) : '更早';
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label)!.push(i);
+  }
+  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  const today = new Date().getDay();
+  const recentDays: string[] = [];
+  for (let i = 2; i < 7; i++) {
+    recentDays.push(weekdays[(today - i + 7) % 7]);
+  }
+  const order = ['今天', '昨天', ...recentDays, '更早'];
+  return order.filter(l => groups.has(l)).map(l => ({ label: l, issues: groups.get(l)! }));
+}
+
+/** Task row for the issues list view. */
+function IssueListItem({ issue, isSelected, onClick }: {
+  issue: IssueSummary; isSelected: boolean; onClick: () => void;
+}) {
+  const col = ISSUE_COLUMNS.find(c => c.key === issue.status);
+  return (
+    <div className={`session-list-item issue-list-item ${isSelected ? 'selected' : ''}`} onClick={onClick}>
+      <div className="list-item-main">
+        <span className="issue-list-id">{issue.identifier}</span>
+        <span className="list-item-title">{issue.title}</span>
+        <span className="issue-list-status" style={{ color: col?.color }}>{col?.label}</span>
+      </div>
+      <div className="list-item-meta">
+        {issue.priority && issue.priority !== 'none' && <span>{issue.priority}</span>}
+        <span>💬 {issue.commentCount ?? 0}</span>
+        <span>会话 {issue.sessionIds.length}</span>
+        <span>{getTimeAgo(new Date(issue.updatedAt))}</span>
+      </div>
+    </div>
+  );
 }
 
 function groupSessionsByDate(sessions: SessionItem[]): { label: string; sessions: SessionItem[] }[] {
@@ -1306,6 +1816,7 @@ function FileBrowser({ encoded }: { encoded: string }) {
           treeCache={treeCache}
           onToggleDir={toggleDir}
           onSelectFile={selectFile}
+          encoded={encoded}
         />
       </div>
       <div className="file-preview">
@@ -1340,7 +1851,7 @@ function FileBrowser({ encoded }: { encoded: string }) {
   );
 }
 
-function TreeNode({ path, entries, level, expandedDirs, selectedFile, treeCache, onToggleDir, onSelectFile }: {
+function TreeNode({ path, entries, level, expandedDirs, selectedFile, treeCache, onToggleDir, onSelectFile, encoded }: {
   path: string;
   entries: DirEntry[];
   level: number;
@@ -1349,6 +1860,7 @@ function TreeNode({ path, entries, level, expandedDirs, selectedFile, treeCache,
   treeCache: Map<string, DirEntry[]>;
   onToggleDir: (path: string) => void;
   onSelectFile: (path: string) => void;
+  encoded: string;
 }) {
   return (
     <div>
@@ -1373,6 +1885,18 @@ function TreeNode({ path, entries, level, expandedDirs, selectedFile, treeCache,
                 <IconFile />
               )}
               <span className="tree-name">{entry.name}</span>
+              {entry.type !== 'dir' && (
+                <a
+                  className="tree-open-external"
+                  href={`/api/projects/${encodeURIComponent(encoded)}/files/raw/${fullPath.split('/').map(encodeURIComponent).join('/')}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="在新页面打开"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                </a>
+              )}
             </div>
             {entry.type === 'dir' && isExpanded && children && (
               <TreeNode
@@ -1384,6 +1908,7 @@ function TreeNode({ path, entries, level, expandedDirs, selectedFile, treeCache,
                 treeCache={treeCache}
                 onToggleDir={onToggleDir}
                 onSelectFile={onSelectFile}
+                encoded={encoded}
               />
             )}
           </div>
