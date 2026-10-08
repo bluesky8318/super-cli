@@ -1,0 +1,250 @@
+{
+  "id": "2026-10-08-145408",
+  "generated_at": "2026-10-08T06:54:08.416577Z",
+  "language": "zh",
+  "pages": [
+    {
+      "slug": "1-xiang-mu-zong-lan-super-cli-shi-shi-yao-jie-jue-shi-yao-wen-ti",
+      "title": "项目总览：super-cli 是什么、解决什么问题",
+      "file": "1-xiang-mu-zong-lan-super-cli-shi-shi-yao-jie-jue-shi-yao-wen-ti.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "2-kuai-su-kai-shi-an-zhuang-gou-jian-yu-ben-di-yun-xing",
+      "title": "快速开始：安装、构建与本地运行",
+      "file": "2-kuai-su-kai-shi-an-zhuang-gou-jian-yu-ben-di-yun-xing.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "3-cli-ming-ling-quan-jing-list-show-search-issue-yu-json-shu-chu",
+      "title": "CLI 命令全景：list、show、search、issue 与 --json 输出",
+      "file": "3-cli-ming-ling-quan-jing-list-show-search-issue-yu-json-shu-chu.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "4-web-kan-ban-wu-fen-zhong-shang-shou-serve-qi-dong-yu-jie-mian-dao-lan",
+      "title": "Web 看板五分钟上手：serve 启动与界面导览",
+      "file": "4-web-kan-ban-wu-fen-zhong-shang-shou-serve-qi-dong-yu-jie-mian-dao-lan.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "5-kai-fa-huan-jing-yu-diao-shi-ji-qiao-dev-re-zhong-zai-typecheck-yu-ce-shi",
+      "title": "开发环境与调试技巧：dev 热重载、typecheck 与测试",
+      "file": "5-kai-fa-huan-jing-yu-diao-shi-ji-qiao-dev-re-zhong-zai-typecheck-yu-ce-shi.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "6-san-ceng-jia-gou-cli-fastify-fu-wu-yu-react-qian-duan-ru-he-xie-zuo",
+      "title": "三层架构：CLI、Fastify 服务与 React 前端如何协作",
+      "file": "6-san-ceng-jia-gou-cli-fastify-fu-wu-yu-react-qian-duan-ru-he-xie-zuo.md",
+      "section": "深入解析",
+      "group": "架构总览与数据流",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "7-duo-provider-chou-xiang-zhu-ce-biao-she-ji-yu-8-jia-cli-gong-ju-gua-pei",
+      "title": "多 Provider 抽象：注册表设计与 8 家 CLI 工具适配",
+      "file": "7-duo-provider-chou-xiang-zhu-ce-biao-she-ji-yu-8-jia-cli-gong-ju-gua-pei.md",
+      "section": "深入解析",
+      "group": "架构总览与数据流",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "8-session-suo-yin-yin-qing-ttl-huan-cun-mtime-shi-xiao-yu-hou-tai-yu-re",
+      "title": "Session 索引引擎：TTL 缓存、mtime 失效与后台预热",
+      "file": "8-session-suo-yin-yin-qing-ttl-huan-cun-mtime-shi-xiao-yu-hou-tai-yu-re.md",
+      "section": "深入解析",
+      "group": "架构总览与数据流",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "9-yi-gou-session-wen-jian-jie-xi-jsonl-liu-shi-du-qu-yu-ge-shi-chai-yi",
+      "title": "异构 Session 文件解析：JSONL 流式读取与格式差异",
+      "file": "9-yi-gou-session-wen-jian-jie-xi-jsonl-liu-shi-du-qu-yu-ge-shi-chai-yi.md",
+      "section": "深入解析",
+      "group": "架构总览与数据流",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "10-xiang-mu-lu-jing-bian-ma-kua-provider-de-mu-lu-ming-ming-ying-she-yu-jie-ma",
+      "title": "项目路径编码：跨 Provider 的目录命名映射与解码",
+      "file": "10-xiang-mu-lu-jing-bian-ma-kua-provider-de-mu-lu-ming-ming-ying-she-yu-jie-ma.md",
+      "section": "深入解析",
+      "group": "架构总览与数据流",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "11-kua-session-quan-wen-sou-suo-yu-ming-zhong-gao-liang-shi-xian",
+      "title": "跨 Session 全文搜索与命中高亮实现",
+      "file": "11-kua-session-quan-wen-sou-suo-yu-ming-zhong-gao-liang-shi-xian.md",
+      "section": "深入解析",
+      "group": "架构总览与数据流",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "12-issue-shu-ju-mo-xing-json-chi-jiu-hua-zhuang-tai-you-xian-ji-yu-biao-qian",
+      "title": "Issue 数据模型：JSON 持久化、状态、优先级与标签",
+      "file": "12-issue-shu-ju-mo-xing-json-chi-jiu-hua-zhuang-tai-you-xian-ji-yu-biao-qian.md",
+      "section": "深入解析",
+      "group": "Issue 看板核心",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "13-le-guan-suo-ji-zhi-version-zi-duan-yu-duo-agent-bing-fa-xie-an-quan",
+      "title": "乐观锁机制：version 字段与多 Agent 并发写安全",
+      "file": "13-le-guan-suo-ji-zhi-version-zi-duan-yu-duo-agent-bing-fa-xie-an-quan.md",
+      "section": "深入解析",
+      "group": "Issue 看板核心",
+      "level": "Advanced"
+    },
+    {
+      "slug": "14-issue-zhuang-tai-ji-yu-agent-gong-zuo-liu-ji-lu-claim-move-comment",
+      "title": "Issue 状态机与 Agent 工作流纪律（claim / move / comment）",
+      "file": "14-issue-zhuang-tai-ji-yu-agent-gong-zuo-liu-ji-lu-claim-move-comment.md",
+      "section": "深入解析",
+      "group": "Issue 看板核心",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "15-ping-lun-huo-dong-liu-yu-issue-guan-xi-fu-zi-zu-sai-guan-lian",
+      "title": "评论、活动流与 Issue 关系（父子、阻塞、关联）",
+      "file": "15-ping-lun-huo-dong-liu-yu-issue-guan-xi-fu-zi-zu-sai-guan-lian.md",
+      "section": "深入解析",
+      "group": "Issue 看板核心",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "16-sse-shi-shi-shi-jian-tui-song-eventhub-she-ji-yu-shi-jian-lei-xing",
+      "title": "SSE 实时事件推送：EventHub 设计与事件类型",
+      "file": "16-sse-shi-shi-shi-jian-tui-song-eventhub-she-ji-yu-shi-jian-lei-xing.md",
+      "section": "深入解析",
+      "group": "Issue 看板核心",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "17-super-cli-taskboard-skill-de-fen-fa-yu-kua-provider-an-zhuang",
+      "title": "super-cli-taskboard Skill 的分发与跨 Provider 安装",
+      "file": "17-super-cli-taskboard-skill-de-fen-fa-yu-kua-provider-an-zhuang.md",
+      "section": "深入解析",
+      "group": "Issue 看板核心",
+      "level": "Beginner"
+    },
+    {
+      "slug": "18-agentprofile-tong-de-agent-qi-dong-pei-zhi-shi-ti",
+      "title": "AgentProfile：统一的 Agent 启动配置实体",
+      "file": "18-agentprofile-tong-de-agent-qi-dong-pei-zhi-shi-ti.md",
+      "section": "深入解析",
+      "group": "Agent 执行体系",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "19-wu-tou-zhi-xing-guan-xian-taskrunner-cong-spawn-dao-hui-hua-zi-dong-bang-ding",
+      "title": "无头执行管线：TaskRunner 从 spawn 到会话自动绑定",
+      "file": "19-wu-tou-zhi-xing-guan-xian-taskrunner-cong-spawn-dao-hui-hua-zi-dong-bang-ding.md",
+      "section": "深入解析",
+      "group": "Agent 执行体系",
+      "level": "Advanced"
+    },
+    {
+      "slug": "20-jiao-hu-shi-qi-dong-yu-macos-zhong-duan-ji-cheng-ghostty-iterm2-warp-deng",
+      "title": "交互式启动与 macOS 终端集成（Ghostty / iTerm2 / Warp 等）",
+      "file": "20-jiao-hu-shi-qi-dong-yu-macos-zhong-duan-ji-cheng-ghostty-iterm2-warp-deng.md",
+      "section": "深入解析",
+      "group": "Agent 执行体系",
+      "level": "Beginner"
+    },
+    {
+      "slug": "21-idea-dao-task-de-zhuan-hua-guan-xian-bu-huo-fen-lei-yu-promote",
+      "title": "Idea 到 Task 的转化管线：捕获、分类与 promote",
+      "file": "21-idea-dao-task-de-zhuan-hua-guan-xian-bu-huo-fen-lei-yu-promote.md",
+      "section": "深入解析",
+      "group": "Agent 执行体系",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "22-react-ying-yong-jia-gou-dan-ye-lu-you-yu-shi-tu-zu-zhi",
+      "title": "React 应用架构：单页路由与视图组织",
+      "file": "22-react-ying-yong-jia-gou-dan-ye-lu-you-yu-shi-tu-zu-zhi.md",
+      "section": "深入解析",
+      "group": "Web 前端实现",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "23-kan-ban-qia-pian-lie-biao-san-shi-tu-shi-xian-yu-tuo-zhuai-jiao-hu",
+      "title": "看板 / 卡片 / 列表三视图实现与拖拽交互",
+      "file": "23-kan-ban-qia-pian-lie-biao-san-shi-tu-shi-xian-yu-tuo-zhuai-jiao-hu.md",
+      "section": "深入解析",
+      "group": "Web 前端实现",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "24-qian-duan-shi-shi-tong-bu-xiao-fei-sse-shi-jian-liu-geng-xin-kan-ban",
+      "title": "前端实时同步：消费 SSE 事件流更新看板",
+      "file": "24-qian-duan-shi-shi-tong-bu-xiao-fei-sse-shi-jian-liu-geng-xin-kan-ban.md",
+      "section": "深入解析",
+      "group": "Web 前端实现",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "25-xiang-mu-wen-jian-liu-lan-qi-an-xu-jia-zai-yu-fa-gao-liang-yu-markdown-xuan-ran",
+      "title": "项目文件浏览器：按需加载、语法高亮与 Markdown 渲染",
+      "file": "25-xiang-mu-wen-jian-liu-lan-qi-an-xu-jia-zai-yu-fa-gao-liang-yu-markdown-xuan-ran.md",
+      "section": "深入解析",
+      "group": "Web 前端实现",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "26-duo-zhu-ti-xi-tong-yu-quan-ju-ui-ti-xi",
+      "title": "多主题系统与全局 UI 体系",
+      "file": "26-duo-zhu-ti-xi-tong-yu-quan-ju-ui-ti-xi.md",
+      "section": "深入解析",
+      "group": "Web 前端实现",
+      "level": "Beginner"
+    },
+    {
+      "slug": "27-harness-pei-zhi-du-qu-mcp-rules-hooks-yu-permissions",
+      "title": "Harness 配置读取：MCP、Rules、Hooks 与 Permissions",
+      "file": "27-harness-pei-zhi-du-qu-mcp-rules-hooks-yu-permissions.md",
+      "section": "深入解析",
+      "group": "配置与扩展能力",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "28-yong-hu-pei-zhi-xi-tong-yu-shi-yong-tong-ji-shu-chu",
+      "title": "用户配置系统与使用统计输出",
+      "file": "28-yong-hu-pei-zhi-xi-tong-yu-shi-yong-tong-ji-shu-chu.md",
+      "section": "深入解析",
+      "group": "配置与扩展能力",
+      "level": "Beginner"
+    },
+    {
+      "slug": "29-wei-xin-kan-ban-ji-cheng-wx-cli-shi-jian-xian-ju-he-yu-ri-bao-sheng-cheng",
+      "title": "微信看板集成：wx-cli 时间线聚合与日报生成",
+      "file": "29-wei-xin-kan-ban-ji-cheng-wx-cli-shi-jian-xian-ju-he-yu-ri-bao-sheng-cheng.md",
+      "section": "深入解析",
+      "group": "配置与扩展能力",
+      "level": "Advanced"
+    },
+    {
+      "slug": "30-shuang-gou-jian-liu-tsup-da-bao-cli-server-yu-vite-gou-jian-web",
+      "title": "双构建流：tsup 打包 CLI/Server 与 Vite 构建 Web",
+      "file": "30-shuang-gou-jian-liu-tsup-da-bao-cli-server-yu-vite-gou-jian-web.md",
+      "section": "深入解析",
+      "group": "工程化实践",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "31-ce-shi-ce-lue-yu-npm-fa-bu-liu-cheng",
+      "title": "测试策略与 npm 发布流程",
+      "file": "31-ce-shi-ce-lue-yu-npm-fa-bu-liu-cheng.md",
+      "section": "深入解析",
+      "group": "工程化实践",
+      "level": "Beginner"
+    }
+  ]
+}
