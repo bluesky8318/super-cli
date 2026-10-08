@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 import { registerListCommand } from './commands/list.js';
 import { registerShowCommand } from './commands/show.js';
@@ -13,12 +14,17 @@ import { registerStatsCommand } from './commands/stats.js';
 import { registerConfigCommand } from './commands/config.js';
 import { registerServeCommand } from './commands/serve.js';
 
+// Read version from package.json at runtime (dist/cli/index.js -> package root).
+const pkg = JSON.parse(
+  readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+) as { version: string };
+
 const program = new Command();
 
 program
   .name('super-cli')
   .description('Multi-CLI session management tool (Claude Code, Qoder, Codex)')
-  .version('0.1.0')
+  .version(pkg.version)
   .option('--provider <name>', 'Filter by CLI provider (claude-code, qoder, codex)');
 
 registerListCommand(program);
