@@ -76,4 +76,36 @@ export class TaskStore {
     existing.tags = (existing.tags ?? []).filter(t => t !== tag);
     await this.save();
   }
+
+  /** Decoded project path -> short id ("p1", "p2", …). */
+  async getProjectShortIds(): Promise<Record<string, string>> {
+    const config = await this.load();
+    return config.projectIds ?? {};
+  }
+
+  /**
+   * Assign stable short ids to any project path that lacks one. Ids are
+   * sequential ("p1", "p2", …) and never reused, so shared URLs stay valid.
+   */
+  async ensureProjectShortIds(decodedPaths: string[]): Promise<Record<string, string>> {
+    const config = await this.load();
+    const ids = config.projectIds ?? {};
+    let next = 1;
+    for (const id of Object.values(ids)) {
+      const m = /^p(\d+)$/.exec(id);
+      if (m) next = Math.max(next, Number(m[1]) + 1);
+    }
+    let changed = false;
+    for (const path of decodedPaths) {
+      if (!ids[path]) {
+        ids[path] = `p${next++}`;
+        changed = true;
+      }
+    }
+    if (changed) {
+      config.projectIds = ids;
+      await this.save();
+    }
+    return ids;
+  }
 }

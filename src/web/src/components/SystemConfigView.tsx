@@ -216,7 +216,7 @@ export default function SystemConfigView({ onToggleSidebar }: { onToggleSidebar?
               onChange={e => setWechatNames(e.target.value)}
             />
 
-            <label className="form-label">想法分类（想法归档项目，分类后才能评论/转任务；留空用内置：个人→personal-notes、工作→work-notes）</label>
+            <label className="form-label">想法分类（想法归档项目，分类后才能评论/转任务；无内置默认，需在此配置后才能分类）</label>
             {ideaCategories.map((c, idx) => (
               <div key={idx} className="idea-cat-row">
                 <input

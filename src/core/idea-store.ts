@@ -38,11 +38,12 @@ const DEFAULT_DATA: IdeaStoreData = {
   ideas: {},
 };
 
-/** Built-in categories; configurable via settings.ideaCategories in system config. */
-export const DEFAULT_IDEA_CATEGORIES: IdeaCategory[] = [
-  { key: 'personal', label: '个人', project: '/Users/alice/notes/personal' },
-  { key: 'work', label: '工作', project: '/Users/alice/work/work-notes' },
-];
+/**
+ * Fallback idea categories, used only when settings.ideaCategories is not
+ * configured. Empty by default: category project paths are user-specific
+ * absolute paths, so ship none and require configuration first.
+ */
+export const DEFAULT_IDEA_CATEGORIES: IdeaCategory[] = [];
 
 export interface IdeaFilter {
   status?: IdeaStatus;

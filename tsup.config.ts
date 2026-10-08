@@ -10,7 +10,9 @@ export default defineConfig({
   platform: 'node',
   splitting: true,
   sourcemap: false,
-  clean: true,
+  // Clean the CLI/Server output but never wipe dist/web (the vite SPA build).
+  // tsup always cleans `**/*` plus these patterns; negations exclude web/.
+  clean: ['!web', '!web/**'],
   dts: false,
   outDir: 'dist',
   external: ['react', 'react-dom'],

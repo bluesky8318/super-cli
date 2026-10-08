@@ -582,6 +582,87 @@ export interface WechatReportData {
   };
 }
 
+export interface WxServerStatusData {
+  installed: boolean;
+  running: boolean;
+  pid?: number | null;
+  baseUrl?: string;
+  ready?: boolean;
+  health?: string;
+  version?: string | null;
+  account?: { wxid: string; name: string } | null;
+  stdoutLog?: string;
+  stderrLog?: string;
+  error?: string;
+}
+
+export async function fetchWxServerStatus(): Promise<WxServerStatusData> {
+  return jsonOrThrow(await fetch(`${API_BASE}/wechat/server`));
+}
+
+export async function startWxServer(): Promise<WxServerStatusData> {
+  return jsonOrThrow(await fetch(`${API_BASE}/wechat/server/start`, { method: 'POST' }));
+}
+
+export async function stopWxServer(): Promise<WxServerStatusData> {
+  return jsonOrThrow(await fetch(`${API_BASE}/wechat/server/stop`, { method: 'POST' }));
+}
+
+export interface WxSummaryConfigData {
+  prompt: string;
+  defaultPrompt: string;
+  runtime: 'pi' | 'kimi' | 'mcode' | 'qoder';
+  /** Optional model override passed as --model; empty = the CLI's global default. */
+  model: string;
+  runtimes: { id: string; name: string; command: string; installed: boolean }[];
+}
+
+export interface WxSummaryEntry {
+  key: string;
+  talker: string;
+  chatName: string;
+  date: string;
+  status: 'pending' | 'done' | 'error';
+  summary?: string;
+  error?: string;
+  runtime?: string;
+  messageCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function fetchWxSummaryConfig(): Promise<WxSummaryConfigData> {
+  return jsonOrThrow(await fetch(`${API_BASE}/wechat/summary-config`));
+}
+
+export async function saveWxSummaryConfig(data: { prompt?: string; runtime?: string; model?: string }): Promise<WxSummaryConfigData> {
+  return jsonOrThrow(await fetch(`${API_BASE}/wechat/summary-config`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }));
+}
+
+export async function fetchWxSummaries(): Promise<{ summaries: WxSummaryEntry[] }> {
+  return jsonOrThrow(await fetch(`${API_BASE}/wechat/summaries`));
+}
+
+export async function generateWxSummary(data: { talker: string; date: string; name?: string; force?: boolean }): Promise<{ entry: WxSummaryEntry }> {
+  return jsonOrThrow(await fetch(`${API_BASE}/wechat/summaries/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }));
+}
+
+export async function deleteWxSummary(key: string): Promise<unknown> {
+  return jsonOrThrow(await fetch(`${API_BASE}/wechat/summaries/${encodeURIComponent(key)}`, { method: 'DELETE' }));
+}
+
+export async function clearWxSummaries(): Promise<unknown> {
+  return jsonOrThrow(await fetch(`${API_BASE}/wechat/summaries/clear`, { method: 'POST' }));
+}
+
 export async function fetchWechatStatus(): Promise<WechatStatusData> {
   return jsonOrThrow(await fetch(`${API_BASE}/wechat/status`));
 }

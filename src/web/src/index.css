@@ -3712,6 +3712,158 @@ body {
   margin-left: 12px;
 }
 
+.wx-server-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: 12px;
+  padding: 3px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.wx-server-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.wx-server-chip.running { color: var(--text-secondary); }
+.wx-server-chip.running .wx-server-dot { background: #3fb950; box-shadow: 0 0 4px #3fb95088; }
+.wx-server-chip.missing { opacity: 0.75; }
+
+.wx-server-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  padding: 5px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.wx-server-btn:hover:not(:disabled) { border-color: var(--text-muted); }
+.wx-server-btn:disabled { opacity: 0.6; cursor: default; }
+.wx-server-btn.start { color: var(--accent); border-color: var(--accent); }
+.wx-server-btn.start:hover:not(:disabled) { background: var(--accent); color: #fff; }
+
+.wx-offline-start { margin-top: 12px; }
+
+/* Summary settings modal */
+.wx-settings-panel {
+  width: 640px;
+  max-width: 92vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.wx-settings-body {
+  padding: 16px 20px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.wx-settings-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.wx-cache-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+textarea.wx-prompt-input {
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.6;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.wx-prompt-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+.wx-prompt-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.wx-saved-tip { font-size: 12px; color: #3fb950; }
+
+.wx-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.wx-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.wx-summary-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wx-summary-name {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.wx-summary-date { color: var(--text-muted); font-weight: 400; }
+
+.wx-summary-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.wx-summary-badge.st-done { color: #3fb950; }
+.wx-summary-badge.st-pending { color: var(--accent); }
+.wx-summary-badge.st-error { color: var(--danger, #e5534b); }
+
+.wx-summary-meta { color: var(--text-muted); font-size: 11px; }
+.wx-summary-err { color: var(--danger, #e5534b); font-size: 11px; }
+
 .wx-date-nav {
   display: flex;
   align-items: center;

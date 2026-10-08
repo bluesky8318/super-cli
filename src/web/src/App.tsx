@@ -45,6 +45,8 @@ interface Message {
 interface ProjectInfo {
   encoded: string;
   decoded: string;
+  /** Stable short id ("p1", "p2", …) used in URLs instead of the full path. */
+  shortId?: string;
   providers: CliProvider[];
   sessionCount: number;
   lastTimestamp?: string;
@@ -134,9 +136,17 @@ export default function App() {
   });
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [selectedProject, setSelectedProject] = useState<string | null>(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('project') || null;
+    const p = new URLSearchParams(window.location.search).get('project');
+    // Short ids (p1, p2, …) resolve once the project list loads; legacy full
+    // paths (old shared links) apply directly.
+    return p && !/^p\d+$/.test(p) ? p : null;
   });
+  // A ?project=p3 short id waiting for the project list to load.
+  const pendingProjectShortId = useRef<string | null>((() => {
+    const p = new URLSearchParams(window.location.search).get('project');
+    return p && /^p\d+$/.test(p) ? p : null;
+  })());
+  const initialModeInUrl = useRef(new URLSearchParams(window.location.search).has('mode'));
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [selectedSession, setSelectedSession] = useState<SessionItem | null>(null);
   const [issues, setIssues] = useState<IssueSummary[]>([]);
@@ -151,25 +161,14 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const params = new URLSearchParams(window.location.search);
-    return (params.get('view') as ViewMode) || 'board';
-  });
-  const [taskTab, setTaskTab] = useState<'issues' | 'sessions'>(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('tab') === 'sessions' ? 'sessions' : 'issues';
-  });
-  const [sortMode, setSortMode] = useState<SortMode>(() => {
-    const params = new URLSearchParams(window.location.search);
-    return (params.get('sort') as SortMode) || 'time-desc';
-  });
+  const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('view-mode') as ViewMode) || 'board');
+  const [taskTab, setTaskTab] = useState<'issues' | 'sessions'>(() => localStorage.getItem('task-tab') === 'sessions' ? 'sessions' : 'issues');
+  const [sortMode, setSortMode] = useState<SortMode>(() => (localStorage.getItem('sort-mode') as SortMode) || 'time-desc');
   const [projectSort, setProjectSort] = useState<'time' | 'count'>('time');
   const [groupByDate, setGroupByDate] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    const groupParam = params.get('group');
-    if (groupParam === 'off') return false;
-    if (groupParam === 'date') return true;
-    const sort = (params.get('sort') as SortMode) || 'time-desc';
+    const saved = localStorage.getItem('group-by-date');
+    if (saved !== null) return saved === '1';
+    const sort = (localStorage.getItem('sort-mode') as SortMode) || 'time-desc';
     return sort === 'time-desc' || sort === 'time-asc';
   });
   const [detailWidth, setDetailWidth] = useState(440);
@@ -226,22 +225,44 @@ export default function App() {
   const messageListRef = useRef<HTMLDivElement>(null);
   const initialSessionId = useRef(new URLSearchParams(window.location.search).get('session'));
 
+  // The URL holds only shareable context (mode / project / provider / session);
+  // view preferences (view / sort / tab / group) live in localStorage instead.
   useEffect(() => {
+    // Wait for a short-id project ref to resolve, so ?project=p3 is not dropped on load.
+    if (pendingProjectShortId.current) return;
     const params = new URLSearchParams();
     params.set('mode', appMode);
+    if (selectedProject) {
+      const shortId = projects.find(p => p.decoded === selectedProject)?.shortId;
+      params.set('project', shortId ?? selectedProject);
+    }
     if (selectedProviders.length > 0) params.set('provider', selectedProviders.join(','));
-    if (selectedProject) params.set('project', selectedProject);
-    if (viewMode !== 'board') params.set('view', viewMode);
-    if (sortMode !== 'time-desc') params.set('sort', sortMode);
     if (selectedSession) params.set('session', selectedSession.sessionId);
-    if (taskTab !== 'issues') params.set('tab', taskTab);
-    const isTimeBased = sortMode === 'time-desc' || sortMode === 'time-asc';
-    if (isTimeBased && !groupByDate) params.set('group', 'off');
-    if (!isTimeBased && groupByDate) params.set('group', 'date');
     const qs = params.toString();
     const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState(null, '', newUrl);
-  }, [appMode, selectedProviders, selectedProject, viewMode, sortMode, selectedSession, groupByDate, taskTab]);
+  }, [appMode, selectedProviders, selectedProject, selectedSession, projects]);
+
+  // Persist view preferences locally.
+  useEffect(() => {
+    localStorage.setItem('view-mode', viewMode);
+    localStorage.setItem('sort-mode', sortMode);
+    localStorage.setItem('task-tab', taskTab);
+    localStorage.setItem('group-by-date', groupByDate ? '1' : '0');
+  }, [viewMode, sortMode, taskTab, groupByDate]);
+
+  // Resolve a short-id project ref (?project=p3) once the project list arrives.
+  useEffect(() => {
+    const pending = pendingProjectShortId.current;
+    if (!pending || projects.length === 0) return;
+    pendingProjectShortId.current = null;
+    const hit = projects.find(p => p.shortId === pending);
+    if (hit) {
+      setSelectedProject(hit.decoded);
+      // Picking a project implies the task view, unless the URL pinned a mode.
+      if (!initialModeInUrl.current) setAppMode('task');
+    }
+  }, [projects]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);

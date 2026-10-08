@@ -1,13 +1,23 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   fetchWechatDashboard,
-  fetchWechatReport,
   fetchWechatStatus,
+  fetchWxServerStatus,
+  fetchWxSummaries,
+  fetchWxSummaryConfig,
+  saveWxSummaryConfig,
+  generateWxSummary,
+  deleteWxSummary,
+  clearWxSummaries,
   searchWechat,
+  startWxServer,
+  stopWxServer,
   type WechatDashboardData,
-  type WechatReportData,
   type WechatStatusData,
   type WechatSearchResults,
+  type WxServerStatusData,
+  type WxSummaryConfigData,
+  type WxSummaryEntry,
 } from '../api/client.js';
 
 function localToday(): string {
@@ -28,20 +38,26 @@ function fmtTime(epochSec: number): string {
 export default function WeChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const [date, setDate] = useState(localToday());
   const [status, setStatus] = useState<WechatStatusData | null>(null);
+  const [server, setServer] = useState<WxServerStatusData | null>(null);
+  const [serverBusy, setServerBusy] = useState(false);
   const [dashboard, setDashboard] = useState<WechatDashboardData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [report, setReport] = useState<WechatReportData | null>(null);
-  const [reportLoading, setReportLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [selectedTalker, setSelectedTalker] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const load = useCallback(async (d: string) => {
     setLoading(true);
     setError(null);
     try {
-      const s = await fetchWechatStatus();
+      // Server-lifecycle status is best-effort: a stale backend without
+      // /api/wechat/server must not break the board.
+      const [s, srv] = await Promise.all([
+        fetchWechatStatus(),
+        fetchWxServerStatus().catch(() => null),
+      ]);
       setStatus(s);
+      if (srv) setServer(srv);
       if (!s.reachable) {
         setDashboard(null);
         return;
@@ -54,25 +70,41 @@ export default function WeChatView({ onToggleSidebar }: { onToggleSidebar?: () =
     }
   }, []);
 
-  useEffect(() => { void load(date); }, [date, load]);
-
-  async function openReport(talker: string, name?: string) {
-    setReportLoading(true);
+  async function handleStartServer() {
+    setServerBusy(true);
     try {
-      setReport(await fetchWechatReport(talker, date, name));
+      setServer(await startWxServer());
+      await load(date);
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
     } finally {
-      setReportLoading(false);
+      setServerBusy(false);
     }
   }
 
-  function copyReport() {
-    if (!report) return;
-    navigator.clipboard.writeText(report.markdown).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+  async function handleStopServer() {
+    if (!window.confirm('确定停止 wx-cli server？看板数据将不可用。')) return;
+    setServerBusy(true);
+    try {
+      setServer(await stopWxServer());
+      await load(date);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setServerBusy(false);
+    }
+  }
+
+  useEffect(() => { void load(date); }, [date, load]);
+
+  // Open the daily report in a new tab via the progress page: it kicks off
+  // background summary generation, shows progress, then redirects to the
+  // report (near-instant when the summary is already cached). The raw .md URL
+  // lets the docu.md Markdown Viewer extension render the report.
+  function viewReport(talker: string, name?: string) {
+    const params = new URLSearchParams({ talker, date });
+    if (name) params.set('name', name);
+    window.open(`/report-progress?${params}`, '_blank');
   }
 
   const cards = dashboard?.cards;
@@ -92,9 +124,44 @@ export default function WeChatView({ onToggleSidebar }: { onToggleSidebar?: () =
           {status?.account && (
             <span className="wx-account">{status.account.name}（{status.account.wxid}）</span>
           )}
+          {server && (
+            <span
+              className={`wx-server-chip${server.running ? ' running' : ''}${server.installed ? '' : ' missing'}`}
+              title={
+                !server.installed
+                  ? (server.error ?? 'PATH 中找不到 wx-cli')
+                  : server.running
+                    ? `wx-cli ${server.version ?? ''} · ${server.health ?? ''} · ${server.baseUrl ?? ''}`
+                    : (server.error ?? `wx-cli server 未运行${server.baseUrl ? ` · ${server.baseUrl}` : ''}`)
+              }
+            >
+              <span className="wx-server-dot" />
+              {!server.installed
+                ? 'wx-cli 未安装'
+                : server.running
+                  ? `服务运行中 · PID ${server.pid ?? '—'}`
+                  : '服务已停止'}
+            </span>
+          )}
         </div>
         <div className="toolbar-right">
+          {server?.installed && (
+            server.running ? (
+              <button className="wx-server-btn" onClick={() => void handleStopServer()} disabled={serverBusy} title="停止 wx-cli server">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+                {serverBusy ? '停止中…' : '停止'}
+              </button>
+            ) : (
+              <button className="wx-server-btn start" onClick={() => void handleStartServer()} disabled={serverBusy} title="启动 wx-cli server">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>
+                {serverBusy ? '启动中…' : '启动服务'}
+              </button>
+            )
+          )}
           <WxSearch onSelectChat={talker => setSelectedTalker(talker)} onJumpDate={d => setDate(d)} />
+          <button className="refresh-btn" onClick={() => setSettingsOpen(true)} title="日报摘要设置">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
           <div className="wx-date-nav">
             <button className="wx-date-btn" onClick={() => setDate(d => shiftDate(d, -1))} title="前一天">‹</button>
             <input
@@ -119,10 +186,16 @@ export default function WeChatView({ onToggleSidebar }: { onToggleSidebar?: () =
           <div className="wx-offline">
             <div className="wx-offline-title">wx-cli server 不可达</div>
             <div className="wx-offline-desc">
-              个人微信看板依赖本机的 wx-cli HTTP 服务。请先运行 <code>wx-cli server run</code>，
-              或在 管理库 → 系统配置 中修改 wx-cli 地址。
+              {server?.installed
+                ? '本机 wx-cli HTTP 服务未运行。点击下方按钮一键启动，或在 管理库 → 系统配置 中修改 wx-cli 地址。'
+                : <>个人微信看板依赖本机的 wx-cli HTTP 服务。请先运行 <code>wx-cli server run</code>，或在 管理库 → 系统配置 中修改 wx-cli 地址。</>}
             </div>
-            {status.error && <div className="wx-offline-error">{status.error}</div>}
+            {server?.installed && !server.running && (
+              <button className="btn-primary wx-offline-start" onClick={() => void handleStartServer()} disabled={serverBusy}>
+                {serverBusy ? '启动中…' : '启动 wx-cli server'}
+              </button>
+            )}
+            {(status.error || server?.error) && <div className="wx-offline-error">{status.error ?? server?.error}</div>}
           </div>
         )}
         {error && <div className="wx-offline"><div className="wx-offline-title">加载失败</div><div className="wx-offline-error">{error}</div></div>}
@@ -177,8 +250,8 @@ export default function WeChatView({ onToggleSidebar }: { onToggleSidebar?: () =
                 {selectedChat && (
                   <div className="wx-chat-actions">
                     <span className="wx-chat-selected-name">已选：{selectedChat.name}</span>
-                    <button className="form-btn" onClick={() => void openReport(selectedChat.talker, selectedChat.name)} disabled={reportLoading}>
-                      {reportLoading ? '生成中…' : '生成日报'}
+                    <button className="form-btn" onClick={() => viewReport(selectedChat.talker, selectedChat.name)}>
+                      查看日报
                     </button>
                   </div>
                 )}
@@ -248,24 +321,7 @@ export default function WeChatView({ onToggleSidebar }: { onToggleSidebar?: () =
         )}
       </div>
 
-      {/* 日报弹窗 */}
-      {report && (
-        <div className="overlay-backdrop" onClick={() => setReport(null)}>
-          <div className="overlay-panel overlay-panel-wide wx-report-panel" onClick={e => e.stopPropagation()}>
-            <div className="overlay-header">
-              <h3>{report.chatName} 日报</h3>
-              <div className="wx-report-actions">
-                <button className="form-btn" onClick={copyReport}>{copied ? '✓ 已复制' : '复制 Markdown'}</button>
-                <button className="close-btn" onClick={() => setReport(null)}>✕</button>
-              </div>
-            </div>
-            <div className="wx-report-stats">
-              消息 {report.stats.totalMessages} · 成员 {report.stats.activeMembers} · 链接 {report.stats.links} · @我 {report.stats.mentions}
-            </div>
-            <pre className="wx-report-md">{report.markdown}</pre>
-          </div>
-        </div>
-      )}
+      {settingsOpen && <WxSummarySettings onClose={() => setSettingsOpen(false)} />}
     </main>
   );
 }
@@ -389,6 +445,180 @@ function WxSearch({ onSelectChat, onJumpDate }: {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ====== Icons (inline SVG, 14px) ====== */
+
+/** Settings modal: summary prompt + runtime config, and summary cache management. */
+function WxSummarySettings({ onClose }: { onClose: () => void }) {
+  const [config, setConfig] = useState<WxSummaryConfigData | null>(null);
+  const [prompt, setPrompt] = useState('');
+  const [runtime, setRuntime] = useState('');
+  const [model, setModel] = useState('');
+  const [summaries, setSummaries] = useState<WxSummaryEntry[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [savedTip, setSavedTip] = useState('');
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [cfg, list] = await Promise.all([
+        fetchWxSummaryConfig(),
+        fetchWxSummaries().catch(() => ({ summaries: [] as WxSummaryEntry[] })),
+      ]);
+      setConfig(cfg);
+      setPrompt(cfg.prompt);
+      setRuntime(cfg.runtime);
+      setModel(cfg.model ?? '');
+      setSummaries(list.summaries);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const cfg = await saveWxSummaryConfig({ prompt, runtime, model });
+      setConfig(cfg);
+      setSavedTip('已保存');
+      setTimeout(() => setSavedTip(''), 1500);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function regenerate(entry: WxSummaryEntry) {
+    setBusyKey(entry.key);
+    try {
+      const res = await generateWxSummary({ talker: entry.talker, date: entry.date, name: entry.chatName, force: true });
+      setSummaries(prev => prev.map(s => (s.key === entry.key ? res.entry : s)));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function removeEntry(key: string) {
+    try {
+      await deleteWxSummary(key);
+      setSummaries(prev => prev.filter(s => s.key !== key));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function clearAll() {
+    if (!window.confirm('确定清空全部摘要缓存？')) return;
+    try {
+      await clearWxSummaries();
+      setSummaries([]);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  const STATUS_LABEL: Record<WxSummaryEntry['status'], string> = { pending: '生成中', done: '已生成', error: '失败' };
+
+  return (
+    <div className="overlay-backdrop" onClick={onClose}>
+      <div className="overlay-panel wx-settings-panel" onClick={e => e.stopPropagation()}>
+        <div className="overlay-header">
+          <h3>日报摘要设置</h3>
+          <button className="close-btn" onClick={onClose}>✕</button>
+        </div>
+        {!config ? (
+          <div className="wx-settings-body"><div className="wx-empty">加载中…</div></div>
+        ) : (
+          <div className="wx-settings-body">
+            <div>
+              <div className="wx-settings-section-title">摘要运行时</div>
+              <select className="form-select" value={runtime} onChange={e => setRuntime(e.target.value)}>
+                {config.runtimes.map(r => (
+                  <option key={r.id} value={r.id} disabled={!r.installed}>
+                    {r.name}（{r.command}）{r.installed ? '' : ' · 未安装'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <div className="wx-settings-section-title">摘要模型（可选）</div>
+              <input
+                className="form-input"
+                value={model}
+                onChange={e => setModel(e.target.value)}
+                placeholder="留空使用 CLI 全局默认模型"
+              />
+              <div className="wx-prompt-hint">填了会在调用时附加 --model 参数，如 glm-5.3、MiniMax-M3、k3</div>
+            </div>
+
+            <div>
+              <div className="wx-settings-section-title">日报摘要 Prompt</div>
+              <textarea
+                className="form-input wx-prompt-input"
+                rows={9}
+                value={prompt}
+                onChange={e => setPrompt(e.target.value)}
+              />
+              <div className="wx-prompt-hint">可用占位符：{'{chatName}'}、{'{date}'}、{'{messageCount}'}、{'{messages}'}</div>
+              <div className="wx-prompt-actions">
+                <button className="form-btn" onClick={() => setPrompt(config.defaultPrompt)}>恢复默认</button>
+                <button className="form-btn primary" onClick={() => void save()} disabled={saving}>
+                  {saving ? '保存中…' : '保存'}
+                </button>
+                {savedTip && <span className="wx-saved-tip">{savedTip}</span>}
+              </div>
+            </div>
+
+            <div>
+              <div className="wx-settings-section-title wx-cache-head">
+                <span>摘要缓存（{summaries.length}）</span>
+                {summaries.length > 0 && (
+                  <button className="form-btn wx-cache-clear" onClick={() => void clearAll()}>清空全部</button>
+                )}
+              </div>
+              {summaries.length === 0 ? (
+                <div className="wx-empty">暂无缓存，查看日报时会自动生成</div>
+              ) : (
+                <div className="wx-summary-list">
+                  {summaries.map(s => (
+                    <div key={s.key} className="wx-summary-row">
+                      <div className="wx-summary-main">
+                        <span className="wx-summary-name">
+                          {s.chatName}
+                          <span className="wx-summary-date">{s.date}</span>
+                          <span className={`wx-summary-badge st-${s.status}`}>{STATUS_LABEL[s.status]}</span>
+                        </span>
+                        <span className="wx-summary-meta">
+                          {s.runtime ?? '—'} · {s.messageCount ?? 0} 条消息 · {new Date(s.updatedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {s.status === 'error' && s.error && <span className="wx-summary-err">{s.error}</span>}
+                      </div>
+                      <button
+                        className="form-btn"
+                        disabled={busyKey === s.key}
+                        onClick={() => void regenerate(s)}
+                        title="重新生成摘要"
+                      >
+                        {busyKey === s.key ? '生成中…' : '重新生成'}
+                      </button>
+                      <button className="form-btn" onClick={() => void removeEntry(s.key)} title="删除该缓存">删除</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

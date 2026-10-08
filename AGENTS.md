@@ -9,7 +9,7 @@
 1. **Session 索引与搜索** — 快速列出、查看、搜索所有历史 session
 2. **任务命名与标签** — 给 session 命名/打标签，视为 task 管理（带状态看板）
 3. **Issue 看板** — 独立的 issue 实体（7 状态、优先级、标签、评论、父子/依赖关系、乐观锁、SSE 实时推送），可绑定多个不同 provider 的 session；agent 工作流见 `docs/issue-workflow.md`
-4. **个人微信看板** — 灵感板块的独立功能，复用本机 wx-cli server 只读 HTTP API（`core/wechat.ts` 聚合层 + `server/routes/wechat.ts` 代理），不落库；配置项 `wechatUrl`/`wechatToken`/`wechatNames`
+4. **个人微信看板** — 灵感板块的独立功能，复用本机 wx-cli server 只读 HTTP API（`core/wechat.ts` 聚合层 + `server/routes/wechat.ts` 代理），聊天数据不落库；配置项 `wechatUrl`/`wechatToken`/`wechatNames`。内置 wx-cli server 启停控制（`GET/POST /api/wechat/server*`）；日报以 `.md` 结尾的 raw 端点输出（适配 docu.md 扩展渲染）；AI 摘要按 `talker|date` 缓存于 `~/.super-cli/wechat-summaries.json`（`core/wechat-summary.ts` 调本地 CLI headless 一次性执行：pi/kimi/mcode/qoder，prompt 与运行时可配置，配置项 `wechatSummaryPrompt`/`wechatSummaryRuntime`/`wechatSummaryModel`（可选 --model 覆盖））
 4. **想法（Idea）** — 一句话随时记录（draft，存 `~/.super-cli/ideas.json`）→ 分类后落到分类项目的 `00-Inbox/Idea/<yyyy>/<yyyy>-<mm>/` md 文档（incubating，md 为唯一事实源，agent 可按格式直接编辑）→ 成熟后转为 issue（md 成为原始需求文档，任务状态回显）；未分类不能评论/转任务；放弃/归档均可恢复（有分类回孵化中，无分类回待分类），不可删除；记录入口为全局悬浮输入（任意页面）。分类（名称→项目路径）在系统配置 `settings.ideaCategories` 维护
 5. **Agent 启动配置** — `~/.super-cli/agents.json`，一个 profile 两种启动模式：交互（新建会话，开终端窗口）与无头（issue run，后台执行，仅 claude-code/codex/pi）
 4. **CLI 模式** — Agent-friendly 命令行交互，支持 `--json` 结构化输出
@@ -118,7 +118,7 @@ super-cli idea add <content>                     # 一句话记录（draft）
 super-cli idea list [--status] [--category] [--project] [--json]
 super-cli idea show <id> [--json]
 super-cli idea categorize <id> <category>        # 分类 → 落 md 文档
-super-cli idea categories [--json]               # 列出分类（含内置默认）
+super-cli idea categories [--json]               # 列出分类
 super-cli idea comment <id> <body>               # 追加评论/修正（写入 md）
 super-cli idea promote <id> [--title] [--project] [--priority]   # 转为任务
 super-cli idea abandon <id>                      # 放弃（可恢复）

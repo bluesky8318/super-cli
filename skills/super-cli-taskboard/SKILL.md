@@ -1,76 +1,87 @@
 ---
 name: super-cli-taskboard
-description: Claim and work issues from the super-cli board when the user mentions super-cli issues, the task board, or asks you to pick up / claim a task. Use for claiming work, syncing issue status, and recording results. Not for GitHub or other external trackers.
+description: Work with the local super-cli issue board and idea pipeline. Use when the user asks to claim, list, update, comment on, move, or run an issue; when asked to pick up a task from the board; when recording results or handling blockers; when capturing an idea, categorizing it, or promoting it to an issue; or when invoked headlessly via `super-cli issue run`. Not for GitHub or other external trackers.
 ---
 
 # super-cli Issue 看板工作流
 
-通过 \`super-cli issue\` CLI 操作本地 issue 看板。所有命令支持 \`--json\` 结构化输出，写操作支持 \`--if-version\` 乐观锁。
+通过 `super-cli issue` / `super-cli idea` CLI 操作本地看板。所有命令支持 `--json`，写操作支持 `--if-version` 乐观锁。
 
 ## 状态机
 
-\`\`\`
+```
 backlog → todo → in_progress → in_review → done
-                   ↓    ↑
-                blocked（阻塞时移入，恢复后移回）
-取消：任意状态 → canceled
-\`\`\`
+                    ↓    ↑
+                 blocked
+任意状态 → canceled
+```
 
-- \`backlog\` = 灵感/未批准执行：除非用户明确授权，不认领、不移动、不做任何实际工作。
-- \`todo\` = 已批准，可认领。
-- \`done\` 只能由用户明确验收后移动，agent 不得自行移入。
+- `backlog` = 未批准执行。**未经用户明确授权，不认领、不移动、不做任何实际工作。**
+- `todo` = 已批准，可认领。
+- `in_review` = 完成待验收。**`done` 只能由用户移动，agent 不得自行移入。**
+- `blocked` = 做不动时移入，恢复后移回 `in_progress`。
 
 ## 认领流程
 
-1. **先读后做**：\`super-cli issue show <id> --comments --json\`，读完整描述和全部评论。评论视为当前需求（含返工）；评论说"先别做"就停。
-2. **认领原子操作**（在开始读代码、改文件之前执行）：
-   \`\`\`bash
+1. **先读后做**：`super-cli issue show <id> --comments --json`。评论视为当前需求（含返工）；评论说"先别做"就停。
+2. **认领原子操作**（在改任何文件之前执行）：
+   ```bash
    super-cli issue claim <id> --session-id <你的sessionId> --json
-   \`\`\`
-   claim 会一步完成 todo → in_progress + 绑定 session。失败（已被他人认领/状态不可认领/已归档）就停止并报告，绝不接管别的会话已认领的 issue。
-   已处于 in_progress 且绑定了当前 session 的 issue 可以直接续做，claim 幂等。
-3. **续跑增量同步**：用上次 \`comment\` 返回的 \`nextCursor\` 增量拉评论：
-   \`\`\`bash
+   ```
+   一步完成 `todo → in_progress` + 绑定 session。失败（已被他人认领/状态不可认领/已归档）就停止报告，绝不接管别人的 issue。已处于 `in_progress` 且绑定当前 session 的 issue 可幂等续做。
+3. **续跑增量同步**：用上次 `comment` 返回的 `nextCursor` 增量拉评论：
+   ```bash
    super-cli issue comment <id> --after "<cursor>" --json
-   \`\`\`
+   ```
 
 ## 完成流程
 
-1. 验证改动可用（直接操作路径验证）。
-2. 评论记录改动内容、验证结果、遗留风险：
-   \`\`\`bash
-   super-cli issue comment <id> --add "已完成 X，验证方式 Y，风险 Z" --agent --session-id <你的sessionId> --json
-   \`\`\`
-3. 移入待验收：
-   \`\`\`bash
-   super-cli issue move <id> in_review --if-version <version> --json
-   \`\`\`
-4. 做不动移 \`blocked\`（并评论说明阻塞原因），放弃移 \`canceled\`。
+1. 验证改动可用。
+2. 评论记录改动、验证结果、遗留风险：
+   ```bash
+   super-cli issue comment <id> --add "已完成 X，验证 Y，风险 Z" --agent --session-id <sid> --json
+   ```
+3. 移入待验收：`super-cli issue move <id> in_review --if-version <v> --json`。
+4. 做不动移 `blocked` 并评论说明原因；放弃移 `canceled`。
 
 ## 并发纪律
 
-- 写操作携带 \`--if-version\`（取自最近一次 \`show\` 的 \`version\`）。
-- 冲突（exit code 2 + \`VERSION_CONFLICT\`）不是错误而是信号：重新 \`show\`，确认 issue 仍可认领且需求未变，最多重试一次；否则停止报告。
+- 写操作携带 `--if-version`（取自最近一次 `show` 的 `version`）。
+- 冲突（exit code 2 + `VERSION_CONFLICT`）是信号：重新 `show`，确认仍可认领且需求未变，最多重试一次；否则停止报告。
 - 绝不循环重试，绝不接管其他会话的认领。
 
-## 常用命令
+## 想法（Idea）流水线
 
-\`\`\`bash
-super-cli issue list --status todo --json          # 找可认领任务
-super-cli issue show <id> --comments --json        # 读需求
-super-cli issue claim <id> --session-id <sid>      # 认领
-super-cli issue comment <id> --add "..." --agent --session-id <sid>
-super-cli issue move <id> in_review --if-version N
-super-cli idea add "<内容> #标签"                   # 记录想法
-super-cli idea promote <id> --agent <agent>        # 想法转为 backlog 任务
-super-cli agent list --json                        # 查看可用的 agent 启动配置
-\`\`\`
+一句话记录 → 分类孵化 → 成熟后转为 backlog issue。
+
+```bash
+super-cli idea add "<内容>"                                # draft
+super-cli idea categories --json                           # 查看可用分类
+super-cli idea categorize <id> <category>                  # → incubating，落 md 文档
+super-cli idea comment <id> "<补充>"                       # 追加评论（写入 md）
+super-cli idea promote <id> [--title] [--project] [--priority]  # → 创建 backlog issue
+super-cli idea abandon|archive|restore <id>                # 终态/可恢复
+```
+
+未分类的 idea 不能评论或 promote。promote 后 md 文档成为任务的原始需求文档。
 
 ## 无头执行（issue run）
 
-用户可能通过 \`super-cli issue run <id> --agent <name>\` 以无头模式（headless）启动你执行任务。此时：
+用户可通过 `super-cli issue run <id> --agent <name>` 以 headless 模式启动你。此时：
 
-- 首轮 prompt 中包含任务标题、描述和本工作流提示；你仍须遵守上述状态机纪律。
-- run 启动时若状态为 todo 会自动移入 in_progress；你无需再 claim，但应用 \`super-cli issue bind\` 语义已由 runner 自动完成（session 自动绑定）。
-- 完成后照常评论记录结果；\`done\` 仍只能由用户移动。
-- \`super-cli issue runs <id>\` 可查看该任务的执行历史。
+- 首轮 prompt 已含任务标题、描述和本工作流；遵守上述状态机纪律。
+- `todo` 状态会自动移入 `in_progress` 并绑定 session，无需再 `claim`。
+- 完成后照常评论记录结果；`done` 仍只能由用户移动。
+- `super-cli issue runs <id>` 查看执行历史；`super-cli issue stop <id>` 停止当前 run。
+
+## 常用命令
+
+```bash
+super-cli issue list --status todo --json          # 找可认领任务
+super-cli issue show <id> --comments --json        # 读需求与评论
+super-cli issue claim <id> --session-id <sid>      # 认领
+super-cli issue comment <id> --add "..." --agent --session-id <sid>
+super-cli issue move <id> in_review --if-version N
+super-cli issue relate <id> parent|blocks|related <targetId>
+super-cli agent list --json                        # 查看可用 agent 配置
+```

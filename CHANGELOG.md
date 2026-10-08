@@ -24,7 +24,7 @@
 
 ### 新增
 
-- **想法（Idea）v2**：生命周期 `draft（待分类）→ incubating（孵化中）→ promoted（已转任务）/ abandoned（已放弃，保留）`；顶部一句话输入框即记录；分类后落到分类项目 `00-Inbox/Idea/<yyyy>/<yyyy>-<mm>/<时间戳>-<id>.md`（md 为唯一事实源，agent 可直接按 frontmatter+段落格式编辑，系统能读回）；评论/修正追加进 md（原始记录不变）；成熟后「转为任务」新建 Issue（md 为原始需求文档，任务状态回显卡片；归属项目从当前全量项目中检索选择，默认分类项目）；未分类不能评论/转任务。放弃/归档两种结束状态**都可恢复**（已分类的回孵化中，未分类的回待分类）；不可删除；已转任务的只能归档。想法页为五列卡片盒看板（待分类｜孵化中｜已转任务｜已放弃｜已归档），支持分类/项目/时间筛选；记录入口为**全局悬浮按钮**（右下角 💡，任意页面可记录，⌘/Ctrl+Enter 保存，保存后想法页自动刷新）。分类（名称→项目路径）在系统配置 `settings.ideaCategories` 维护，内置默认：个人→`personal-notes`、工作→`work-notes`。CLI：`idea add|list|show|categorize|categories|comment|promote|abandon|restore|delete`
+- **想法（Idea）v2**：生命周期 `draft（待分类）→ incubating（孵化中）→ promoted（已转任务）/ abandoned（已放弃，保留）`；顶部一句话输入框即记录；分类后落到分类项目 `00-Inbox/Idea/<yyyy>/<yyyy>-<mm>/<时间戳>-<id>.md`（md 为唯一事实源，agent 可直接按 frontmatter+段落格式编辑，系统能读回）；评论/修正追加进 md（原始记录不变）；成熟后「转为任务」新建 Issue（md 为原始需求文档，任务状态回显卡片；归属项目从当前全量项目中检索选择，默认分类项目）；未分类不能评论/转任务。放弃/归档两种结束状态**都可恢复**（已分类的回孵化中，未分类的回待分类）；不可删除；已转任务的只能归档。想法页为五列卡片盒看板（待分类｜孵化中｜已转任务｜已放弃｜已归档），支持分类/项目/时间筛选；记录入口为**全局悬浮按钮**（右下角 💡，任意页面可记录，⌘/Ctrl+Enter 保存，保存后想法页自动刷新）。分类（名称→项目路径）在系统配置 `settings.ideaCategories` 维护，无内置默认，需先配置才能分类。CLI：`idea add|list|show|categorize|categories|comment|promote|abandon|restore|delete`
 - **Agent 启动配置**：`super-cli agent list/add/show/edit/remove`，统一管理 agent CLI 启动参数（provider/model/工作目录/额外参数/环境变量）；首次启动自动为每个 provider 生成内置 profile；存储于 `~/.super-cli/agents.json`
 - **任务无头执行（issue run）**：`super-cli issue run <id> --agent <name>` 以后台无头模式执行任务（支持 Claude Code / Codex / Pi），自动绑定产出 session、写执行记录（`~/.super-cli/runs/`）；`issue runs` 查看历史，`issue stop` 停止；run 启动时 todo 自动移入 in_progress
 - **CLI 别名**：`super-cli task` 作为 `super-cli issue` 的别名

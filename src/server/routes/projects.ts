@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import type { CliProvider } from '../../core/types.js';
 import { SessionIndex } from '../../core/session-index.js';
 import { ProjectArchive } from '../../core/project-archive.js';
+import { TaskStore } from '../../core/task-store.js';
 import { getProjectDetail } from '../../core/project-info.js';
 import { getAvailableProviders } from '../../core/providers.js';
 import { ConfigManager } from '../../core/config.js';
@@ -47,11 +48,19 @@ const RAW_CONTENT_TYPES: Record<string, string> = {
 
 export function registerProjectRoutes(app: FastifyInstance, index: SessionIndex): void {
   const archive = new ProjectArchive();
+  const taskStore = new TaskStore();
 
-  /** Find a project by any of its identities (decoded path or legacy provider encodings). */
+  /** Find a project by any of its identities (decoded path, short id, or legacy provider encodings). */
   async function findProject(encoded: string) {
     const projects = await index.getProjects();
-    return projects.find(p => p.encoded === encoded || p.decoded === encoded || p.aliases.includes(encoded));
+    const hit = projects.find(p => p.encoded === encoded || p.decoded === encoded || p.aliases.includes(encoded));
+    if (hit) return hit;
+    if (/^p\d+$/.test(encoded)) {
+      const shortIds = await taskStore.getProjectShortIds();
+      const decoded = Object.entries(shortIds).find(([, id]) => id === encoded)?.[0];
+      if (decoded) return projects.find(p => p.decoded === decoded);
+    }
+    return undefined;
   }
 
   /** All ids that may reference this project in pinned/archived config lists. */
@@ -79,11 +88,14 @@ export function registerProjectRoutes(app: FastifyInstance, index: SessionIndex)
       archive.getArchivedIds(),
       archive.getPinnedIds(),
     ]);
+    // Stable short ids ("p1", "p2", …) for compact, shareable web URLs.
+    const shortIds = await taskStore.ensureProjectShortIds(projects.map(p => p.decoded));
     const augmented = projects.map(p => {
       // Match legacy provider-specific dir names as well as the decoded-path identity.
       const ids = [p.encoded, p.decoded, ...p.aliases];
       return {
         ...p,
+        shortId: shortIds[p.decoded],
         archived: ids.some(id => archivedIds.includes(id)),
         pinned: ids.some(id => pinnedIds.includes(id)),
       };

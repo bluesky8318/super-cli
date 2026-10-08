@@ -57,17 +57,29 @@ export async function startServer(options: { port: number; host: string }): Prom
   registerRefreshRoute(app, index);
 
   const webDir = join(__dirname, '..', 'web');
-  if (existsSync(webDir)) {
+  const hasWeb = existsSync(webDir);
+  if (hasWeb) {
     await app.register(fastifyStatic, {
       root: webDir,
       prefix: '/',
       wildcard: true,
     });
-
-    app.setNotFoundHandler((_req, reply) => {
-      reply.sendFile('index.html');
-    });
+  } else {
+    app.log.warn('dist/web not found — the web UI is unavailable; run `pnpm build:web`');
   }
+
+  app.setNotFoundHandler((req, reply) => {
+    // API misses must be real JSON 404s; only frontend paths fall back to the SPA.
+    if (req.url.startsWith('/api/')) {
+      reply.code(404).send({ error: `Route not found: ${req.method} ${req.url}` });
+      return;
+    }
+    if (hasWeb) {
+      reply.sendFile('index.html');
+      return;
+    }
+    reply.code(404).send({ error: 'Web UI not built. Run: pnpm build:web' });
+  });
 
   const address = await app.listen({ port: options.port, host: options.host });
   return address;

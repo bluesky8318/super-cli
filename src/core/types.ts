@@ -254,6 +254,8 @@ export interface AppConfig {
   sessions: Record<string, TaskLabel>;
   archivedProjects?: string[];
   pinnedProjects?: string[];
+  /** Decoded project path -> stable short id ("p1", "p2", …) used in web URLs. */
+  projectIds?: Record<string, string>;
   settings: {
     defaultPort?: number;
     terminal?: TerminalType;
