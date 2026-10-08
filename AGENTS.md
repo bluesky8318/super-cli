@@ -92,6 +92,11 @@ skills/           # 随包分发的 agent skill（super-cli-taskboard/SKILL.md�
 - 代码注释用英文；面向用户的字符串可以用中文
 - 无独立数据库，只读 `~/.claude/` JSONL，只写 `~/.super-cli/config.json`（标签/命名）和 `~/.super-cli/issues.json`（issue 看板）
 - tsconfig 中定义了 `@core/*`、`@cli/*`、`@server/*` 路径别名，由 tsup 在构建时解析
+- **本仓库是 GitHub 公开仓库**：禁止提交任何敏感信息（真实用户名路径 `/Users/<name>`、雇主/内部项目名、真实微信 chat id/群名/人名、密钥 token）。`.zread/` 由 zread 从本机重新生成时会带入真实路径，**每次重建后提交前必须脱敏**：
+  ```bash
+  grep -rl "/Users/$USER\|Users-$USER" .zread/ | xargs sed -i '' "s|/Users/$USER|/Users/alice|g; s|Users-$USER|Users-alice|g"
+  ```
+  提交前再全量复查：`git ls-files -m -o --exclude-standard | xargs grep -ilE "token|secret|@chatroom|[0-9]{11}"` 逐一确认命中项非真实数据
 
 ## CLI 命令参考
 
