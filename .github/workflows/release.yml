@@ -28,7 +28,8 @@ jobs:
 
       - run: pnpm typecheck
 
-      - run: pnpm test
+      # No test files exist yet; --passWithNoTests keeps this a real gate once tests are added
+      - run: pnpm vitest run --passWithNoTests
 
       - run: pnpm build
 
