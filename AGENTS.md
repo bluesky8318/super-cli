@@ -98,6 +98,19 @@ skills/           # 随包分发的 agent skill（super-cli-taskboard/SKILL.md�
   ```
   提交前再全量复查：`git ls-files -m -o --exclude-standard | xargs grep -ilE "token|secret|@chatroom|[0-9]{11}"` 逐一确认命中项非真实数据
 
+## 发布
+
+npm 包 `@bluesky8318/super-cli` 通过 GitHub Actions 发布（`.github/workflows/release.yml`），**禁止在本机 `npm publish`**。流程：
+
+```bash
+npm version minor --no-git-tag-version   # 或 patch；feature 用 minor，修复用 patch
+git add package.json && git commit -m "x.y.z"
+git push origin main
+git tag vx.y.z && git push origin vx.y.z # 推 tag 触发 CI 发布
+```
+
+CI 会依次跑 install → typecheck → test → build → 校验 tag 与 package.json 版本一致 → `npm publish`。npm 认证使用 repo secret `NPM_TOKEN`（automation token）。发布后到另一台机器验证 `npm view @bluesky8318/super-cli version` 与 `super-cli --version` 一致。
+
 ## CLI 命令参考
 
 ```bash
